@@ -62,19 +62,23 @@ export function mapCatalog(payload: unknown): CatalogModel[] {
     const pricing = record(row.pricing);
     const priceSpec = record(row.tokenhub_pricing);
     const tiers = priceSpec?.tiers;
-    // Conditional and multi-tier prices need a richer translation than a flat UI rate.
-    if ((Array.isArray(tiers) && tiers.length > 1)
-        || (Array.isArray(pricing?.overrides) && pricing.overrides.length > 0)) continue;
+    const tiered = (Array.isArray(tiers) && tiers.length > 1)
+      || (Array.isArray(pricing?.overrides) && pricing.overrides.length > 0);
+    // The host takes one flat rate. A tiered model shows its first (smallest-prompt) tier, which
+    // must be the flat `pricing` row; anything else is not a translation we can vouch for.
+    const firstTier = Array.isArray(tiers) ? record(tiers[0]) : undefined;
+    if (tiered && (!firstTier || firstTier.prompt !== pricing?.prompt
+        || firstTier.completion !== pricing?.completion)) continue;
     const input = perMillion(pricing?.prompt);
     const output = perMillion(pricing?.completion);
     if (input === undefined || output === undefined) continue;
+    // A missing cache rate falls back to the input rate: an upper bound, never free.
     const cacheRead = perMillion(pricing?.input_cache_read ?? pricing?.cached_prompt);
     const cacheWrite = perMillion(pricing?.cache_write);
-    const estimated = cacheRead === undefined || cacheWrite === undefined;
     const modelName = typeof name === "string" && name ? name : id;
     models.push({
       id,
-      name: modelName + (estimated ? " (cache cost estimate)" : ""),
+      name: modelName + (tiered ? " (tiered pricing)" : ""),
       reasoning: parameters.includes("reasoning_effort") || parameters.includes("thinking")
         || parameters.includes("enable_thinking"),
       input: inputs.includes("image") ? ["text", "image"] : ["text"],

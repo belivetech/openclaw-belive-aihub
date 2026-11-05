@@ -26,9 +26,25 @@ Select a model using its full client reference, such as `belive-aihub/qwen/qwen3
 
 The provider uses the OpenClaw 2026.11.1 `catalog.run`, `registerModelCatalogProvider({ liveCatalog })` and `resolveDynamicModel` contracts. Both catalog surfaces fetch the authenticated account's models from the configured official API endpoint. No `main`-only discovery API is required. Refresh through the host's model listing/restart path; background automatic refresh is not claimed.
 
-Only ready text Chat Completions models with advertised tool support, known context length and representable input/output pricing are listed. Image input is included when the catalog advertises it. Non-chat, unpriced, conditional-price and multiple-tier rows are omitted rather than made to look free or assigned invented limits. The plugin uses a **4096-token client reply budget** because the current API does not publish each model's output maximum; this is not a claim about its true maximum.
+Only ready text Chat Completions models with advertised tool support, known context length and representable input/output pricing are listed. Image input is included when the catalog advertises it. Non-chat and unpriced rows, and rows without a published context length, are omitted rather than made to look free or assigned invented limits.
 
-Prices are converted from per-token API rates to OpenClaw's per-million-token UI units. If a cache rate is absent, the model is labeled **cache cost estimate** and that bucket uses the input-token rate for estimation. Check AI Hub Activity for actual charges; client estimates are not an invoice. If the host cannot represent a future pricing shape, fix the mapper before claiming support for those rows.
+The plugin sets a **4096-token reply budget** per model because the API does not yet publish each model's output maximum. OpenClaw 2026.11.1 sends that budget as the request's output limit, so long replies and reasoning-heavy turns can stop at 4096 tokens. To allow more for a model you know supports it, set a per-model parameter, which OpenClaw sends as given:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "models": {
+        "belive-aihub/qwen/qwen3.8-flash": { "params": { "maxTokens": 16384 } }
+      }
+    }
+  }
+}
+```
+
+Stay within the model's documented output maximum; the upstream refuses larger values.
+
+Prices are converted from per-token API rates to OpenClaw's per-million-token UI units. Models whose price rises with prompt size are named **(tiered pricing)** and show their first (smallest-prompt) tier; longer prompts cost more. If a cache rate is absent, that bucket uses the input-token rate, an upper bound rather than free. Check AI Hub Activity for actual charges; client estimates are not an invoice. If the host cannot represent a future pricing shape, fix the mapper before claiming support for those rows.
 
 The default endpoint is `https://tokenhub-api.belive.sg/api/v1`. For isolated staging qualification, explicitly configure `models.providers.belive-aihub.baseUrl` as `https://api-stg-tokenhub.belive.sg/api/v1` and use a staging key. Catalog requests accept only those two official HTTPS bases, refuse redirects, have an eight-second deadline and a bounded response size. Completion transport and user overrides are host-owned; configure only an endpoint you intend to trust with the key.
 

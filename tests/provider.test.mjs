@@ -63,14 +63,35 @@ test("mapping keeps exact IDs and verified context, and excludes unsupported row
   assert.throws(() => mapCatalog({ data: null }), /Invalid/);
 });
 
-test("missing cache prices are labeled estimates rather than free", () => {
+test("missing cache prices fall back to the input price rather than free, without renaming the model", () => {
   const model = entry();
   delete model.pricing.cached_prompt;
   delete model.pricing.cache_write;
   const result = mapCatalog({ data: [model] })[0];
-  assert.match(result.name, /cache cost estimate/);
+  assert.equal(result.name, "Fixture model");
   assert.equal(result.cost.cacheRead, result.cost.input);
   assert.equal(result.cost.cacheWrite, result.cost.input);
+});
+
+test("tiered models list at their first tier and say so; an inconsistent tier table is excluded", () => {
+  // Shape of the production catalog's tiered rows (2026-11-05): flat `pricing` is the first tier.
+  const tiered = entry("lab/tiered");
+  tiered.pricing.overrides = [{ min_prompt_tokens: 256000, prompt: "0.0000012", completion: "0.0000048" }];
+  tiered.tokenhub_pricing = { type: "tiered_token_v1", tier_basis: "total_prompt", tiers: [
+    { upper_bound_tokens: 256000, prompt: "0.0000001425", completion: "0.0000004465" },
+    { upper_bound_tokens: null, prompt: "0.0000012", completion: "0.0000048" },
+  ] };
+  const result = mapCatalog({ data: [tiered] });
+  assert.equal(result.length, 1);
+  assert.equal(result[0].name, "Fixture model (tiered pricing)");
+  assert.equal(result[0].cost.input, 0.1425);
+  assert.equal(result[0].cost.output, 0.4465);
+  const mismatched = structuredClone(tiered);
+  mismatched.id = "lab/mismatched";
+  mismatched.tokenhub_pricing.tiers[0].prompt = "0.0000012";
+  const overridesOnly = entry("lab/overrides-only");
+  overridesOnly.pricing.overrides = tiered.pricing.overrides;
+  assert.deepEqual(mapCatalog({ data: [mismatched, overridesOnly] }), []);
 });
 
 test("catalog rejects unexpected origins without issuing a request", async t => {

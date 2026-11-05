@@ -35,3 +35,11 @@ Fixes model discovery for keys supplied through `BELIVE_TOKENHUB_API_KEY` or an 
 
 - `npm run typecheck`: passed. `npm test`: **8 passed, 0 failed** under Node 26.8.2. The new env-reference regression fails against the 0.1.1 source (7 passed, 1 failed) and passes with the fix.
 - No new paid calls were made. The live chat path is unchanged; only the discovery credential selection changed. [Bundled/official placement remains requested separately](https://github.com/openclaw/openclaw/issues/193454).
+
+## Version 0.1.3
+
+Lists models with tiered (prompt-size-dependent) prices instead of omitting them, and stops renaming models whose cache rates are absent.
+
+- Against the production catalog read on 2026-11-06, 0.1.2 listed 59 of the 78 ready tool-capable chat models; 17 were omitted for tiered prices (all GPT-5.x/6 models, MiniMax M3 and most Qwen Plus/Flash models) and 34 carried a "(cache cost estimate)" suffix. 0.1.3 lists 76: tiered models show their first tier, named "(tiered pricing)", and only when that tier equals the flat `pricing` row. A missing cache rate still uses the input rate. The two remaining omissions, `anthropic/claude-opus-4-5` and `anthropic/claude-sonnet-4-5`, have no `context_length` in the gateway catalog; that is a gateway data gap, and the plugin does not invent a context window.
+- Confirmed in the 2026.11.1 completions transport that the model's `maxTokens` is sent as the request output limit when no override is set, and that a per-model `params.maxTokens` override is sent unclamped. The README documents that override; the 4096 budget stays until the API publishes per-model output maximums.
+- `npm run typecheck`: passed. `npm test`: **9 passed, 0 failed** under Node 26.8.2. No paid calls; the chat path is unchanged.
