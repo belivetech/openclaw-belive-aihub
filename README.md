@@ -4,7 +4,13 @@ A release-compatible provider plugin for [BeLive AI Hub](https://aihub.belive.sg
 
 ## Install and sign in
 
-Staging qualification has passed; see [VALIDATION.md](VALIDATION.md) for the tested release and limits. Registry publication and verification are separate steps. For a local build:
+Install the community package from its [ClawHub listing](https://clawhub.ai/belivetech/plugins/openclaw-belive-aihub):
+
+```sh
+openclaw plugins install clawhub:@belivetech/openclaw-belive-aihub
+```
+
+OpenClaw 2026.11.1 installs, loads and activates this community provider, but `plugins doctor` retains a provenance warning. The host reserves official trust for packages admitted to its official catalog/feed. Review the [security audit](https://clawhub.ai/belivetech/plugins/openclaw-belive-aihub/security-audit) and [validation record](https://github.com/belivetech/openclaw-belive-aihub/blob/main/VALIDATION.md). For a local build:
 
 ```sh
 npm ci --ignore-scripts
@@ -47,4 +53,4 @@ openclaw plugins doctor --json
 
 On 2026.11.1, `plugins validate --root` validates tool/feature authoring-helper metadata and rejects the documented generic provider entry. This package uses actual host installation, runtime inspection and doctor checks instead; it does not add fake tool/feature metadata to pass that command.
 
-See `VALIDATION.md` for actual results and qualification limits. Community publication, upstream bundled inclusion and successful live qualification are separate milestones.
+See the [validation record](https://github.com/belivetech/openclaw-belive-aihub/blob/main/VALIDATION.md) for actual results and qualification limits. Community publication, upstream bundled inclusion and successful live qualification are separate milestones.
