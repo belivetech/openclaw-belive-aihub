@@ -1,0 +1,68 @@
+import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
+import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth";
+import { BASE_URL, DEFAULT_MODEL, KEY_ENV, PROVIDER_ID, fetchCatalog, officialBaseUrl } from "./catalog.js";
+
+export default definePluginEntry({
+  id: PROVIDER_ID,
+  name: "BeLive AI Hub",
+  description: "BeLive AI Hub model provider",
+  register(api) {
+    api.registerProvider({
+      id: PROVIDER_ID,
+      label: "BeLive AI Hub",
+      docsPath: "https://aihub.belive.sg/docs/openclaw",
+      envVars: [KEY_ENV],
+      auth: [createProviderApiKeyAuthMethod({
+        providerId: PROVIDER_ID,
+        methodId: "api-key",
+        label: "BeLive AI Hub API key",
+        hint: "Workspace inference key from aihub.belive.sg",
+        optionKey: "beliveAihubApiKey",
+        flagName: "--belive-aihub-api-key",
+        envVar: KEY_ENV,
+        promptMessage: "Enter your BeLive AI Hub workspace inference key",
+        defaultModel: `${PROVIDER_ID}/${DEFAULT_MODEL}`,
+      })],
+      catalog: {
+        order: "simple",
+        async run(ctx) {
+          const key = ctx.resolveProviderApiKey(PROVIDER_ID).apiKey;
+          if (!key) return null;
+          const baseUrl = officialBaseUrl(ctx.config.models?.providers?.[PROVIDER_ID]?.baseUrl ?? BASE_URL);
+          const models = await fetchCatalog(baseUrl, key, ctx.signal);
+          return { provider: { baseUrl, apiKey: key, api: "openai-completions", models } };
+        },
+      },
+      resolveDynamicModel(ctx) {
+        if (ctx.provider !== PROVIDER_ID) return;
+        const config = ctx.providerConfig;
+        const baseUrl = officialBaseUrl(config?.baseUrl ?? BASE_URL);
+        const model = config?.models?.find(row => row.id === ctx.modelId);
+        if (!model || !model.input.includes("text")) return;
+        return {
+          id: model.id, name: model.name, reasoning: model.reasoning,
+          contextWindow: model.contextWindow, maxTokens: model.maxTokens, cost: model.cost,
+          input: model.input.filter((kind): kind is "text" | "image" => kind === "text" || kind === "image"),
+          provider: PROVIDER_ID, api: "openai-completions", baseUrl,
+        };
+      },
+    });
+    api.registerModelCatalogProvider({
+      provider: PROVIDER_ID,
+      kinds: ["text"],
+      async liveCatalog(ctx) {
+        const key = ctx.resolveProviderApiKey(PROVIDER_ID).apiKey;
+        if (!key) return null;
+        const baseUrl = officialBaseUrl(ctx.config.models?.providers?.[PROVIDER_ID]?.baseUrl ?? BASE_URL);
+        const models = await fetchCatalog(baseUrl, key, ctx.signal);
+        return models.map(model => ({
+          kind: "text" as const,
+          provider: PROVIDER_ID,
+          model: model.id,
+          label: model.name,
+          source: "live" as const,
+        }));
+      },
+    });
+  },
+});

@@ -1,0 +1,22 @@
+{
+  "id": "belive-aihub",
+  "categories": ["models"],
+  "providers": ["belive-aihub"],
+  "providerEndpoints": [{
+    "endpointClass": "belive-aihub",
+    "hosts": ["tokenhub-api.belive.sg", "api-stg-tokenhub.belive.sg"]
+  }],
+  "setup": { "providers": [{ "id": "belive-aihub", "envVars": ["BELIVE_TOKENHUB_API_KEY"] }] },
+  "providerAuthChoices": [{
+    "provider": "belive-aihub",
+    "method": "api-key",
+    "choiceId": "belive-aihub-api-key",
+    "choiceLabel": "BeLive AI Hub API key",
+    "groupId": "belive-aihub",
+    "groupLabel": "BeLive AI Hub",
+    "cliFlag": "--belive-aihub-api-key",
+    "cliOption": "--belive-aihub-api-key <key>",
+    "cliDescription": "BeLive AI Hub workspace inference key"
+  }],
+  "configSchema": { "type": "object", "additionalProperties": false, "properties": {} }
+}
