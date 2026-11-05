@@ -26,11 +26,12 @@ export default definePluginEntry({
       catalog: {
         order: "simple",
         async run(ctx) {
-          const key = ctx.resolveProviderApiKey(PROVIDER_ID).apiKey;
-          if (!key) return null;
+          // `apiKey` is the config-safe value (an env name or marker); only `discoveryApiKey` is the secret.
+          const { apiKey, discoveryApiKey } = ctx.resolveProviderApiKey(PROVIDER_ID);
+          if (!apiKey || !discoveryApiKey) return null;
           const baseUrl = officialBaseUrl(ctx.config.models?.providers?.[PROVIDER_ID]?.baseUrl ?? BASE_URL);
-          const models = await fetchCatalog(baseUrl, key, ctx.signal);
-          return { provider: { baseUrl, apiKey: key, api: "openai-completions", models } };
+          const models = await fetchCatalog(baseUrl, discoveryApiKey, ctx.signal);
+          return { provider: { baseUrl, apiKey, api: "openai-completions", models } };
         },
       },
       resolveDynamicModel(ctx) {
@@ -51,7 +52,7 @@ export default definePluginEntry({
       provider: PROVIDER_ID,
       kinds: ["text"],
       async liveCatalog(ctx) {
-        const key = ctx.resolveProviderApiKey(PROVIDER_ID).apiKey;
+        const key = ctx.resolveProviderApiKey(PROVIDER_ID).discoveryApiKey;
         if (!key) return null;
         const baseUrl = officialBaseUrl(ctx.config.models?.providers?.[PROVIDER_ID]?.baseUrl ?? BASE_URL);
         const models = await fetchCatalog(baseUrl, key, ctx.signal);

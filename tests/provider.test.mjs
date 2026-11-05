@@ -25,12 +25,13 @@ function registered() {
   return { provider: providers[0], catalog: catalogs[0] };
 }
 
-function context(apiKey, baseUrl = STAGING_URL) {
+// A pasted key resolves to the same value in both fields; an env-sourced key keeps only its name in `apiKey`.
+function context(apiKey, baseUrl = STAGING_URL, discoveryApiKey = apiKey) {
   return {
     config: { models: { providers: { [PROVIDER_ID]: { baseUrl } } } },
     resolveProviderApiKey(provider) {
       assert.equal(provider, PROVIDER_ID);
-      return { apiKey, profileId: "fixture-profile" };
+      return { apiKey, discoveryApiKey, profileId: "fixture-profile" };
     },
   };
 }
@@ -106,6 +107,26 @@ test("released SDK registration discovers models in runtime and picker with each
   assert.equal(calls.length, 4);
   assert.ok(calls.every(call => call.url === STAGING_URL + "/models" && call.redirect === "error"));
   assert.equal(provider.resolveDynamicModel({ provider: "openrouter", modelId: "lab/nested/model" }), undefined);
+});
+
+test("env-sourced keys authenticate discovery with the resolved secret, never the env name", async t => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push(options.headers.Authorization);
+    return Response.json({ data: [entry()] });
+  });
+  const { provider, catalog } = registered();
+  const ctx = context(KEY_ENV, STAGING_URL, "fixture-env-secret");
+  const runtime = await provider.catalog.run(ctx);
+  assert.equal(runtime.provider.apiKey, KEY_ENV);
+  assert.equal(runtime.provider.models[0].id, "lab/nested/model");
+  assert.equal((await catalog.liveCatalog(ctx))[0].model, "lab/nested/model");
+  assert.deepEqual(calls, ["Bearer fixture-env-secret", "Bearer fixture-env-secret"]);
+  // A non-env secret-ref marker has no discovery secret: no request carries the marker.
+  const marker = context("secretref-marker", STAGING_URL, null);
+  assert.equal(await provider.catalog.run(marker), null);
+  assert.equal(await catalog.liveCatalog(marker), null);
+  assert.equal(calls.length, 2);
 });
 
 test("catalog errors, cancellation and absent credentials do not become an empty/free fallback", async t => {

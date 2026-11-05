@@ -1,6 +1,6 @@
 {
   "name": "@belivetech/openclaw-belive-aihub",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "BeLive AI Hub model provider for OpenClaw",
   "type": "module",
   "license": "MIT",

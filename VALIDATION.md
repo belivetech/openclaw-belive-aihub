@@ -27,4 +27,11 @@ A fresh isolated install with `openclaw plugins install clawhub:@belivetech/open
 
 This is an official-admission limitation in OpenClaw 2026.11.1: its trust resolver requires a matching entry in the host's official external-plugin catalog/feed. A populated community registry record retains this warning; clean scans and correct package metadata do not confer official trust. The loader warns without refusing runtime access. Independent review confirmed this behavior. No official channel, package identity or install record was substituted, and no host checks were weakened.
 
-Version 0.1.1 updates documentation links and records this registry result; the provider runtime and manifest are unchanged. [Bundled/official placement remains requested separately](https://github.com/openclaw/openclaw/issues/193454).
+Version 0.1.1 updates documentation links and records this registry result; the provider runtime and manifest are unchanged.
+
+## Version 0.1.2
+
+Fixes model discovery for keys supplied through `BELIVE_TOKENHUB_API_KEY` or an environment-reference auth profile. On OpenClaw 2026.11.1, `resolveProviderApiKey` returns the environment variable's *name* in `apiKey` and the secret only in `discoveryApiKey` (`src/agents/models-config.providers.secrets.ts`, "Public auth retains the env name; only discovery consumes its resolved value"). Versions 0.1.0 and 0.1.1 sent `apiKey` as the bearer, so env-sourced setups received HTTP 401 and no models; the qualification above used a pasted key, where both fields hold the same value. Discovery now uses `discoveryApiKey`; the returned provider keeps the config-safe `apiKey`. A non-environment secret reference without a discovery secret returns no catalog instead of sending its marker.
+
+- `npm run typecheck`: passed. `npm test`: **8 passed, 0 failed** under Node 26.8.2. The new env-reference regression fails against the 0.1.1 source (7 passed, 1 failed) and passes with the fix.
+- No new paid calls were made. The live chat path is unchanged; only the discovery credential selection changed. [Bundled/official placement remains requested separately](https://github.com/openclaw/openclaw/issues/193454).
