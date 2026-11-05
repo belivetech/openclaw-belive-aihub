@@ -4,7 +4,7 @@ A release-compatible provider plugin for [BeLive AI Hub](https://aihub.belive.sg
 
 ## Install and sign in
 
-The source package is under qualification; registry publication is pending. For a local build:
+Staging qualification has passed; see [VALIDATION.md](VALIDATION.md) for the tested release and limits. Registry publication and verification are separate steps. For a local build:
 
 ```sh
 npm ci --ignore-scripts

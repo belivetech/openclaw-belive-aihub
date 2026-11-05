@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-05",
+  "environment": "staging",
+  "host_version": "2026.11.1",
+  "host_commit": "4ffdd2047d192dd65554de3c8c46c0e0197c6e2a",
+  "tested_provider_source": "247497b839c29c463c8e0e9764374beecf99b611",
+  "runtime": "Node.js 26.8.2",
+  "model": "qwen/qwen3.8-flash",
+  "approved_bounds": {
+    "usd": 5,
+    "inference_requests": 12,
+    "seconds": 600
+  },
+  "inference_requests": 3,
+  "elapsed_seconds": 165.296,
+  "customer_total_usd": "0.00047934",
+  "vision_qualified": false,
+  "supplier_invoice_reconciled": false,
+  "actual_agent_tool_round_trip": true,
+  "requests": [
+    {
+      "id": "req_jr8v7gamjghsljfjwu41b95bhb",
+      "model": "qwen/qwen3.8-flash",
+      "streamed": true,
+      "tokens_prompt": 2490,
+      "tokens_completion": 26,
+      "total_cost": 0.00036643,
+      "cost_complete": true
+    },
+    {
+      "id": "req_08k4e4ifzrrvusl15kvjxujs0c",
+      "model": "qwen/qwen3.8-flash",
+      "streamed": true,
+      "tokens_prompt": 2546,
+      "tokens_completion": 11,
+      "total_cost": 0.00010701,
+      "cost_complete": true
+    },
+    {
+      "id": "req_6hzndgl9afsyhq6rvi2cqwv2vw",
+      "model": "qwen/qwen3.8-flash",
+      "streamed": false,
+      "tokens_prompt": 32,
+      "tokens_completion": 3,
+      "total_cost": 5.9e-06,
+      "cost_complete": true
+    }
+  ],
+  "nonstreaming_scope": "Companion call using the installed OpenAI SDK; real Gateway agent tool turn used streaming.",
+  "ending_prepaid_balance_usd": "4.99952066",
+  "reserved_usd": "0.00000000",
+  "test_key_revoked": true
+}
