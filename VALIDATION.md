@@ -57,3 +57,34 @@ Replaces the flat 4096-token reply budget with the gateway's published output ma
 Adds `name` ("BeLive AI Hub") and `description` to `openclaw.plugin.json`. ClawHub flagged 0.1.4 with `manifest-name-missing` because the manifest had no display name. No code change.
 
 - `npm run typecheck`: passed. `npm test`: **10 passed, 0 failed** under Node 26.8.2. No paid calls.
+
+## Version 0.2.0
+
+Adds native BeLive AI Hub adapters for image generation, video generation, speech and media understanding, so media no longer needs `litellm`, `openrouter` or `openai` pointed at AI Hub. Checked 2026-11-06 against published npm `openclaw@2026.11.1` (`4ffdd20`) under Node 26.8.2.
+
+**Implemented:** image generation (`POST /images/generations`, reference-image edits on models that list `input_references`), video generation (`POST /videos` with `Idempotency-Key`, saved job, resume, download), speech (`POST /audio/speech`, WAV), video understanding (`video_url` over Chat Completions), and live-catalogue pickers for image, video and speech models. Image understanding needs no adapter: the host reads images with any `belive-aihub/*` chat model that lists `image`.
+
+**Not provided, with reason:** speech to text (OpenClaw uploads the audio in the request; AI Hub takes a file uploaded beforehand), music, Xiaomi MiMo TTS (served on Chat Completions with its own shape), asynchronous speech jobs, video reference inputs and saved characters (Kling Motion Control), `n` greater than 1 for images (AI Hub allows 1), and webhooks. A feature or option the live catalogue does not offer fails with a message naming what is offered, before any paid request, and never falls back to another provider.
+
+**Host surface:** the adapters import only `plugin-entry` and `provider-auth` from the SDK, the two typed public subpaths this plugin already used, and make their own requests to the two official bases. They do not use the host's private-local `provider-http`, `image-generation`, `video-generation`, `speech-provider` or `provider-auth-runtime` subpaths, or the `media-understanding` subpath, which `plugins doctor` reports as deprecated; a first build that imported its video helper produced that compatibility notice and was replaced. Credentials come from `resolveProviderAuthProfileApiKey` (a pasted key or env-reference profile saved for `belive-aihub`), else `BELIVE_TOKENHUB_API_KEY`.
+
+- `npm run typecheck`: passed. `npm test`: **38 passed, 0 failed** (10 existing, 28 new) under Node 26.8.2 after a clean build. The new tests mock `fetch`, run the real host auth store in a temporary state directory, and cover: an env-backed key (the env name stand-in is never sent), a pasted key in a saved profile that wins over the environment, no request and no use of other providers' env vars or profiles when the BeLive key is absent, official-base enforcement, registration against the manifest contracts, live-catalogue mapping and pickers, image geometry and reference-image refusals, video submit with one stable `Idempotency-Key` across retries and reruns, lookup by key instead of resubmitting, resume after a poll timeout with no second POST, the 15-minute floor, failed/cancelled/expired jobs, 400 refusals without retry, content redirect without the key, non-MP4 downloads, speech length/format refusals and WAV validation, and video-understanding model and endpoint checks.
+- `plugins doctor --json` on the tested install: no plugin errors, no compatibility notices, no shadowing or configuration warnings; `ok: false` for the same unverified-provenance warning as earlier versions.
+
+### Live staging run from the packed artifact
+
+`npm pack` produced `belivetech-openclaw-belive-aihub-0.2.0.tgz`, **SHA-256 `4990817d01e99614f0a019fa9329d70fd2901b9127478937bf608a0e7871ec98`**. It was installed with `openclaw plugins install <tarball> --accept-capabilities --force` into a fresh `HOME` and `OPENCLAW_STATE_DIR` for released `openclaw@2026.11.1`; `plugins inspect belive-aihub --runtime --json` showed text inference, image generation, video generation, speech and media understanding registered. `models.providers.belive-aihub.baseUrl` was `https://api-stg-tokenhub.belive.sg/api/v1`; the only credential was `BELIVE_TOKENHUB_API_KEY` in the environment (no auth profile, no other provider key). The release tarball differs from this tested one only in `README.md` and `VALIDATION.md`; `dist/`, `openclaw.plugin.json` and `package.json` are byte-identical. All six features ran through `openclaw infer`:
+
+| Feature | Model | Saved content check | Cost |
+| --- | --- | --- | --- |
+| Image generation | `qwen/qwen-image-2.1-turbo`, `--size 1024x1024` | PNG, 1024 x 1024 | USD 0.016 (price table) |
+| Video generation | `alibaba/wan3.0-video`, 480P, 2 s | `ffprobe`: h264 854x480 + aac, 2.02 s, 682,351 bytes | USD 0.07 (price table) |
+| Video resume | same model, new prompt | client killed after the job id was saved; the rerun resumed it. A lookup by the saved key returned the same job id, `completed`; `ffprobe`: h264 854x480 + aac, 2.02 s | USD 0.07 (job `usage.tokenhub_cost`) |
+| Speech | `qwen/qwen-audio-3.0-tts-flash`, voice `loongjohn` | `ffprobe`: WAV pcm_s16le, 24 kHz mono, 4.24 s | about USD 0.0007 |
+| Image understanding | `z-ai/glm-5.3-flash` | answer named a red circle, a green triangle and the text "BANANA 42" in a drawn test image | under USD 0.001 |
+| Video understanding | `qwen/qwen3.8-flash` | answer described a red balloon rising against a blue sky in the generated clip | under USD 0.005 |
+
+The set ran twice, first on a superseded build and then on the tarball above; both passed. Estimated spend across both runs is about USD 0.32 of the USD 2 allowance (four 2 s videos, two images, two speech requests, four chat requests). Sanitized records are in [qualification-2026-11-06-media.json](https://github.com/belivetech/openclaw-belive-aihub/blob/main/qualification-2026-11-06-media.json). Not exercised live: a pasted-key profile (covered by the unit tests against the host's real auth store), reference-image edits, frame images, and production.
+
+Note: `openclaw infer image describe` resolves a `belive-aihub/*` chat model's image input from the cached catalogue, so run `openclaw models list --provider belive-aihub --refresh` after installing; before that refresh the host treated the model as text only.
+
