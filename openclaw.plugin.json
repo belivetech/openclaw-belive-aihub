@@ -1,5 +1,7 @@
 {
   "id": "belive-aihub",
+  "name": "BeLive AI Hub",
+  "description": "BeLive AI Hub model provider for OpenClaw",
   "categories": ["models"],
   "providers": ["belive-aihub"],
   "providerEndpoints": [{

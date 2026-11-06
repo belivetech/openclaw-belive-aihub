@@ -51,3 +51,9 @@ Replaces the flat 4096-token reply budget with the gateway's published output ma
 - `maxTokens` is `top_provider.max_completion_tokens` capped at 32768; a model with no published maximum, or a value that is not a positive integer, keeps 4096. OpenClaw 2026.11.1 sends `maxTokens` as the request output limit and the gateway reserves credit for it before dispatch, so the cap keeps a model's full maximum (Kimi K3 publishes 1,000,000) out of every request.
 - Against the production catalog read on 2026-11-06: 76 models listed; 56 at 32768, three below it (8000, 16000, 32000) and 17 at 4096.
 - `npm run typecheck`: passed. `npm test`: **10 passed, 0 failed** under Node 26.8.2. No paid calls; the chat path is unchanged.
+
+## Version 0.1.5
+
+Adds `name` ("BeLive AI Hub") and `description` to `openclaw.plugin.json`. ClawHub flagged 0.1.4 with `manifest-name-missing` because the manifest had no display name. No code change.
+
+- `npm run typecheck`: passed. `npm test`: **10 passed, 0 failed** under Node 26.8.2. No paid calls.
