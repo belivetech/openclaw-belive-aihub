@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import plugin from "../dist/index.js";
-import { BASE_URL, STAGING_URL, KEY_ENV, PROVIDER_ID, fetchCatalog, mapCatalog, officialBaseUrl, perMillion } from "../dist/catalog.js";
+import { BASE_URL, STAGING_URL, KEY_ENV, PROVIDER_ID, fetchCatalog, mapCatalog, officialBaseUrl, perMillion, replyBudget } from "../dist/catalog.js";
 
 function entry(id = "lab/nested/model") {
   return {
@@ -71,6 +71,19 @@ test("missing cache prices fall back to the input price rather than free, withou
   assert.equal(result.name, "Fixture model");
   assert.equal(result.cost.cacheRead, result.cost.input);
   assert.equal(result.cost.cacheWrite, result.cost.input);
+});
+
+test("reply budget follows the published output maximum, capped, with the old budget as fallback", () => {
+  // Production /models, 2026-11-06: Qwen3.8 Flash 131000, Kimi K3 1000000, DeepSeek 384000.
+  const model = (top) => ({ ...entry(), ...(top === undefined ? {} : { top_provider: top }) });
+  const budgets = [undefined, { context_length: 1000000, max_completion_tokens: 8192 },
+    { context_length: 1000000, max_completion_tokens: 131000 },
+    { context_length: 1000000, max_completion_tokens: 1000000 },
+    { context_length: 1000000, max_completion_tokens: null }, { max_completion_tokens: "128000" }]
+    .map(top => mapCatalog({ data: [model(top)] })[0].maxTokens);
+  assert.deepEqual(budgets, [4096, 8192, 32768, 32768, 4096, 4096]);
+  assert.equal(replyBudget({ max_completion_tokens: 0 }), 4096);
+  assert.equal(replyBudget({ max_completion_tokens: 1.5 }), 4096);
 });
 
 test("tiered models list at their first tier and say so; an inconsistent tier table is excluded", () => {

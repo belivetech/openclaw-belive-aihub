@@ -28,7 +28,7 @@ The provider uses the OpenClaw 2026.11.1 `catalog.run`, `registerModelCatalogPro
 
 Only ready text Chat Completions models with advertised tool support, known context length and representable input/output pricing are listed. Image input is included when the catalog advertises it. Non-chat and unpriced rows, and rows without a published context length, are omitted rather than made to look free or assigned invented limits.
 
-The plugin sets a **4096-token reply budget** per model because the API does not yet publish each model's output maximum. OpenClaw 2026.11.1 sends that budget as the request's output limit, so long replies and reasoning-heavy turns can stop at 4096 tokens. To allow more for a model you know supports it, set a per-model parameter, which OpenClaw sends as given:
+Each model's reply budget is the output maximum AI Hub publishes for it (`top_provider.max_completion_tokens`, the smallest any of its routes accepts), capped at **32768 tokens**. Models with no published maximum keep a **4096-token** budget. OpenClaw 2026.11.1 sends the budget as each request's output limit, and AI Hub reserves credit for that limit before the call, so the plugin does not send a model's full maximum (up to 1,000,000 tokens). To allow more for one model, set a per-model parameter, which OpenClaw sends as given:
 
 ```json
 {

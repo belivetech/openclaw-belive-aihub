@@ -43,3 +43,11 @@ Lists models with tiered (prompt-size-dependent) prices instead of omitting them
 - Against the production catalog read on 2026-11-06, 0.1.2 listed 59 of the 78 ready tool-capable chat models; 17 were omitted for tiered prices (all GPT-5.x/6 models, MiniMax M3 and most Qwen Plus/Flash models) and 34 carried a "(cache cost estimate)" suffix. 0.1.3 lists 76: tiered models show their first tier, named "(tiered pricing)", and only when that tier equals the flat `pricing` row. A missing cache rate still uses the input rate. The two remaining omissions, `anthropic/claude-opus-4-5` and `anthropic/claude-sonnet-4-5`, have no `context_length` in the gateway catalog; that is a gateway data gap, and the plugin does not invent a context window.
 - Confirmed in the 2026.11.1 completions transport that the model's `maxTokens` is sent as the request output limit when no override is set, and that a per-model `params.maxTokens` override is sent unclamped. The README documents that override; the 4096 budget stays until the API publishes per-model output maximums.
 - `npm run typecheck`: passed. `npm test`: **9 passed, 0 failed** under Node 26.8.2. No paid calls; the chat path is unchanged.
+
+## Version 0.1.4
+
+Replaces the flat 4096-token reply budget with the gateway's published output maximum, now live on production `/models` (gateway #2277/#2281, `tokenhub-prod-gateway:278`, 2026-11-06).
+
+- `maxTokens` is `top_provider.max_completion_tokens` capped at 32768; a model with no published maximum, or a value that is not a positive integer, keeps 4096. OpenClaw 2026.11.1 sends `maxTokens` as the request output limit and the gateway reserves credit for it before dispatch, so the cap keeps a model's full maximum (Kimi K3 publishes 1,000,000) out of every request.
+- Against the production catalog read on 2026-11-06: 76 models listed; 56 at 32768, three below it (8000, 16000, 32000) and 17 at 4096.
+- `npm run typecheck`: passed. `npm test`: **10 passed, 0 failed** under Node 26.8.2. No paid calls; the chat path is unchanged.

@@ -6,7 +6,12 @@ export const BASE_URL = "https://tokenhub-api.belive.sg/api/v1";
 export const STAGING_URL = "https://api-stg-tokenhub.belive.sg/api/v1";
 export const DEFAULT_MODEL = "qwen/qwen3.8-flash";
 const MAX_BYTES = 4 * 1024 * 1024;
-const OUTPUT_CAP = 4096;
+/** Reply budget when the catalog publishes no output maximum for a model. */
+const FALLBACK_OUTPUT = 4096;
+/** Upper bound on any reply budget. OpenClaw sends the budget as each request's output limit, and
+ *  the gateway reserves credit for that limit before dispatch, so a model's published maximum
+ *  (up to 1,000,000 tokens) is not sent as is. */
+const OUTPUT_CEILING = 32768;
 
 type RecordValue = Record<string, unknown>;
 export type CatalogModel = Pick<ProviderRuntimeModel,
@@ -36,6 +41,14 @@ export function perMillion(value: unknown): number | undefined {
   return Number.isFinite(result) && result <= 1e9 ? result : undefined;
 }
 
+/** The gateway's published output maximum (`top_provider.max_completion_tokens`, the smallest any
+ *  routable endpoint accepts), capped at {@link OUTPUT_CEILING}; the fallback where none is published. */
+export function replyBudget(topProvider: unknown): number {
+  const published = record(topProvider)?.max_completion_tokens;
+  return typeof published === "number" && Number.isSafeInteger(published) && published > 0
+    ? Math.min(published, OUTPUT_CEILING) : FALLBACK_OUTPUT;
+}
+
 export function mapCatalog(payload: unknown): CatalogModel[] {
   const rows = record(payload)?.data;
   if (!Array.isArray(rows)) throw new Error("Invalid BeLive AI Hub model catalog");
@@ -58,7 +71,7 @@ export function mapCatalog(payload: unknown): CatalogModel[] {
           return endpoint?.route === "chat_completions" && endpoint?.status === "ready"
             && Array.isArray(supported) && supported.includes("tools");
         })
-        || typeof context !== "number" || !Number.isSafeInteger(context) || context < OUTPUT_CAP) continue;
+        || typeof context !== "number" || !Number.isSafeInteger(context) || context < FALLBACK_OUTPUT) continue;
     const pricing = record(row.pricing);
     const priceSpec = record(row.tokenhub_pricing);
     const tiers = priceSpec?.tiers;
@@ -84,8 +97,7 @@ export function mapCatalog(payload: unknown): CatalogModel[] {
       input: inputs.includes("image") ? ["text", "image"] : ["text"],
       cost: { input, output, cacheRead: cacheRead ?? input, cacheWrite: cacheWrite ?? input },
       contextWindow: context,
-      // A documented client reply budget; the API does not publish the model's true output maximum.
-      maxTokens: OUTPUT_CAP,
+      maxTokens: replyBudget(row.top_provider),
     });
     seen.add(id);
   }
