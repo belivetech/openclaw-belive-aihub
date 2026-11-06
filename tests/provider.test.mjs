@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import plugin from "../dist/index.js";
 import { BASE_URL, STAGING_URL, KEY_ENV, PROVIDER_ID, fetchCatalog, mapCatalog, officialBaseUrl, perMillion, replyBudget } from "../dist/catalog.js";
+import { fakeApi } from "./helpers.mjs";
 
 function entry(id = "lab/nested/model") {
   return {
@@ -14,15 +15,12 @@ function entry(id = "lab/nested/model") {
 }
 
 function registered() {
-  const providers = [];
-  const catalogs = [];
-  plugin.register({
-    registerProvider: provider => providers.push(provider),
-    registerModelCatalogProvider: catalog => catalogs.push(catalog),
-  });
-  assert.equal(providers.length, 1);
-  assert.equal(catalogs.length, 1);
-  return { provider: providers[0], catalog: catalogs[0] };
+  const { api, registered: all } = fakeApi();
+  plugin.register(api);
+  assert.equal(all.providers.length, 1);
+  const text = all.catalogs.filter(catalog => catalog.kinds.includes("text"));
+  assert.equal(text.length, 1);
+  return { provider: all.providers[0], catalog: text[0] };
 }
 
 // A pasted key resolves to the same value in both fields; an env-sourced key keeps only its name in `apiKey`.

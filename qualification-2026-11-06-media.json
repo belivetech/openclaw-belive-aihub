@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-06",
+  "package": "@belivetech/openclaw-belive-aihub@0.2.0",
+  "testedTarballSha256": "4990817d01e99614f0a019fa9329d70fd2901b9127478937bf608a0e7871ec98",
+  "host": "openclaw@2026.11.1 (4ffdd20), isolated HOME and OPENCLAW_STATE_DIR, Node 26.8.2",
+  "endpoint": "https://api-stg-tokenhub.belive.sg/api/v1",
+  "credential": "BELIVE_TOKENHUB_API_KEY from the environment; no auth profile; no other provider key present",
+  "installed": "openclaw plugins install <tarball> --accept-capabilities --force; plugins inspect --runtime: imageGeneration, videoGeneration, speech, mediaUnderstanding and text inference registered under belive-aihub",
+  "checks": [
+    { "capability": "image generation", "command": "openclaw infer image generate --model belive-aihub/qwen/qwen-image-2.1-turbo --size 1024x1024", "result": "ok, image/png", "validated": "sips: 1024 x 1024 png, 1230502 bytes", "listPriceUsd": 0.016 },
+    { "capability": "video generation", "command": "openclaw infer video generate --model belive-aihub/alibaba/wan3.0-video --resolution 480P --duration 2", "result": "ok, video/mp4, about 110 s", "validated": "ffprobe: h264 854x480 + aac, 2.02 s, 682351 bytes", "listPriceUsd": 0.07 },
+    { "capability": "video resume", "command": "same command with a different prompt; client killed with SIGKILL after the job id was saved, then rerun", "result": "ok; the rerun resumed the saved job", "validated": "lookup by the saved Idempotency-Key returns the saved job id, status completed; ffprobe: h264 854x480 + aac, 2.02 s, 1606891 bytes; job record removed", "jobUsageUsd": 0.07 },
+    { "capability": "speech", "command": "openclaw infer tts convert --local --provider belive-aihub (qwen/qwen-audio-3.0-tts-flash, voice loongjohn)", "result": "ok, wav", "validated": "ffprobe: pcm_s16le 24000 Hz mono, 4.24 s, 203564 bytes", "listPriceUsd": 0.0007 },
+    { "capability": "image understanding", "command": "openclaw infer image describe --model belive-aihub/z-ai/glm-5.3-flash on a drawn red circle, green triangle and the text BANANA 42", "result": "ok", "validated": "answer named a red circle, a green triangle and the text \"BANANA 42\"" },
+    { "capability": "video understanding", "command": "openclaw infer video describe --model belive-aihub/qwen/qwen3.8-flash on the generated balloon clip", "result": "ok", "validated": "answer described a red balloon rising against a blue sky" }
+  ],
+  "note": "Run twice: once on a superseded build, then on the tarball above after the video-understanding helper was replaced. Charges are the catalogue price table (the two resume jobs report 0.07 in their job usage). Estimated total across both runs is about USD 0.32 of the USD 2 allowance."
+}
