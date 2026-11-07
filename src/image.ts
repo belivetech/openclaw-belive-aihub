@@ -1,7 +1,7 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { baseUrlFor, isConfigured, resolveApiKey } from "./auth.js";
 import { PROVIDER_ID } from "./catalog.js";
-import { bearer, fetchJson, record } from "./http.js";
+import { bearer, fetchJsonWithId, record, withRequestId } from "./http.js";
 import { fetchImageModels, type ImageModel } from "./media-catalog.js";
 import { extensionFor, sniffImage } from "./sniff.js";
 
@@ -67,16 +67,17 @@ export async function generateImage(req: ImageRequest) {
     ...imageGeometry(model, req),
     ...(req.inputImages?.length ? { input_references: references(model, req.inputImages) } : {}),
   };
-  const payload = record(await fetchJson(baseUrl + "/images/generations", {
+  const answer = await fetchJsonWithId(baseUrl + "/images/generations", {
     method: "POST", headers: bearer(apiKey, { "Content-Type": "application/json" }), body: JSON.stringify(body),
-  }, "image generation", { timeoutMs }));
+  }, "image generation", { timeoutMs });
+  const payload = record(answer.payload);
   const first = record(Array.isArray(payload?.data) ? payload.data[0] : undefined);
   const encoded = first?.b64_json;
   const bytes = typeof encoded === "string" ? Buffer.from(encoded, "base64") : undefined;
   const mime = bytes ? sniffImage(bytes) : undefined;
   if (!bytes || bytes.length > MAX_IMAGE_BYTES || !mime) {
     // The request was accepted and may have been charged; say so rather than retrying.
-    throw new Error("BeLive AI Hub image generation returned no usable PNG, JPEG or WebP data; the request may have been charged, so check Activity before retrying");
+    throw new Error(withRequestId("BeLive AI Hub image generation returned no usable PNG, JPEG or WebP data; the request may have been charged, so check Activity before retrying", answer.requestId));
   }
   return {
     images: [{
@@ -84,6 +85,7 @@ export async function generateImage(req: ImageRequest) {
       ...(typeof first?.revised_prompt === "string" ? { revisedPrompt: first.revised_prompt } : {}),
     }],
     model: model.id,
+    ...(answer.requestId ? { metadata: { requestId: answer.requestId } } : {}),
   };
 }
 

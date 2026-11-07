@@ -142,3 +142,10 @@ A fresh `HOME` and `OPENCLAW_STATE_DIR` for released `openclaw@2026.11.1` under 
 | `infer audio transcribe --file clip.wav` (default model) | 0.3.1 | `qwen/qwen-audio-3.1-asr-flash`, "Belive AI hub speech-to-text test: one, two, three, four, five.", `req_gbl03yd131kw3v2ils81g6mtbn`, USD 0.00002288 |
 
 Six paid staging requests in all: five short vision turns on `qwen/qwen3.8-flash` (the CLI does not print their request ids) and one transcription. The vision turns were the 0.3.0 run, two runs of an earlier 0.3.1 build without `normalizeResolvedModel` (answers "white" and "Unknown": no image sent, which is how the `models add` limitation was found), and the two above. The production fallback to 3.0 is covered by the mocked test only, because staging offers 3.1.
+
+## Version 0.3.2
+
+Reports the gateway's request id (`X-Generation-Id`) for support, from customer feedback on 2026-11-07. Every media failure that reached AI Hub ends with `(AI Hub request <id>)`: HTTP refusals, answers that are not JSON, and results that may have been charged (image, speech, transcription and video understanding). Image results carry `metadata.requestId`; video results already carried `jobId` and `generationId`. Speech and transcription results have no metadata field in `openclaw@2026.11.1`, so their id appears in failures only. A header that is not a plain id is ignored. Chat runs through the host's own transport and is unchanged.
+
+- `npm run typecheck`: passed. `npm test`: **59 passed, 0 failed** under Node 24.16.0; existing image, speech, transcription and understanding tests now also assert the id in results and failures, and that a malformed header is not repeated.
+- Staging, 2026-11-07, the built adapters called directly with only the staging key: a speech request with an unknown voice failed with the gateway's voice list and `(AI Hub request req_22uzfwjt220txb6gmgc89xn6ox)` (refused before running, uncharged, and `GET /generation` answers 404 for it); `qwen/qwen-image-2.1-turbo` returned `metadata.requestId` `req_5obm213tyruv57167tmv7piwyx`, which `GET /generation?id=` returned with the model and USD 0.016.

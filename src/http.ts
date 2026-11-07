@@ -3,8 +3,21 @@
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
 const MAX_ERROR_BYTES = 16 * 1024;
 
+const REQUEST_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** The gateway's id for one request (`X-Generation-Id`): shown in Activity, and readable with `GET /generation?id=`. */
+export function requestIdOf(response: Response): string | undefined {
+  const id = response.headers.get("x-generation-id")?.trim();
+  return id && REQUEST_ID.test(id) ? id : undefined;
+}
+
+/** Appends the request id, so support can trace a failure to the gateway's record of it. */
+export function withRequestId(message: string, requestId?: string): string {
+  return requestId ? `${message} (AI Hub request ${requestId})` : message;
+}
+
 export class BeliveApiError extends Error {
-  constructor(message: string, readonly status?: number, readonly retryAfterMs?: number) {
+  constructor(message: string, readonly status?: number, readonly retryAfterMs?: number, readonly requestId?: string) {
     super(message);
     this.name = "BeliveApiError";
   }
@@ -80,11 +93,30 @@ export async function fetchChecked(
   }
   if (response.ok || options.accept?.(response.status)) return response;
   const detail = errorDetail((await readLimited(response, MAX_ERROR_BYTES, "error body").catch(() => Buffer.alloc(0))).toString("utf8"));
+  const requestId = requestIdOf(response);
   throw new BeliveApiError(
-    `BeLive AI Hub ${label} returned HTTP ${response.status}${detail ? `: ${detail}` : ""}`,
+    withRequestId(`BeLive AI Hub ${label} returned HTTP ${response.status}${detail ? `: ${detail}` : ""}`, requestId),
     response.status,
     retryAfterMs(response),
+    requestId,
   );
+}
+
+/** A JSON answer with the gateway's request id, for results and for errors after a paid request. */
+export async function fetchJsonWithId(
+  url: string,
+  init: RequestInit,
+  label: string,
+  options: RequestOptions,
+): Promise<{ payload: unknown; requestId?: string }> {
+  const response = await fetchChecked(url, init, label, options);
+  const requestId = requestIdOf(response);
+  const body = await readLimited(response, MAX_JSON_BYTES, `${label} response`);
+  try {
+    return { payload: JSON.parse(body.toString("utf8")), ...(requestId ? { requestId } : {}) };
+  } catch {
+    throw new BeliveApiError(withRequestId(`BeLive AI Hub ${label} returned a response that is not JSON`, requestId), undefined, undefined, requestId);
+  }
 }
 
 export async function fetchJson(
@@ -93,13 +125,7 @@ export async function fetchJson(
   label: string,
   options: RequestOptions,
 ): Promise<unknown> {
-  const response = await fetchChecked(url, init, label, options);
-  const body = await readLimited(response, MAX_JSON_BYTES, `${label} response`);
-  try {
-    return JSON.parse(body.toString("utf8"));
-  } catch {
-    throw new BeliveApiError(`BeLive AI Hub ${label} returned a response that is not JSON`);
-  }
+  return (await fetchJsonWithId(url, init, label, options)).payload;
 }
 
 export function bearer(apiKey: string, extra: Record<string, string> = {}): Record<string, string> {
