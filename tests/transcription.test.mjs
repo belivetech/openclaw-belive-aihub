@@ -12,7 +12,7 @@ const plugin = (await import("../dist/index.js")).default;
 const { STAGING_URL, BASE_URL, KEY_ENV, PROVIDER_ID } = await import("../dist/catalog.js");
 const { buildUnderstandingProvider } = await import("../dist/understanding.js");
 const { mapTranscriptionModels } = await import("../dist/media-catalog.js");
-const { MAX_RECORDING_BYTES, DEFAULT_TRANSCRIPTION_MODEL } = await import("../dist/transcription.js");
+const { MAX_RECORDING_BYTES, DEFAULT_TRANSCRIPTION_MODEL, FALLBACK_TRANSCRIPTION_MODEL } = await import("../dist/transcription.js");
 const { fakeApi, routedFetch, json, PNG_BASE64, WAV_BYTES } = await import("./helpers.mjs");
 
 after(() => rmSync(home, { recursive: true, force: true }));
@@ -174,6 +174,19 @@ test("the size limit is inclusive", async t => {
   assert.equal(exact.length, MAX_RECORDING_BYTES);
   assert.equal((await provider.transcribeAudioWithContext(ask({ buffer: exact }))).ok, true);
   assert.equal(posts(calls).length, 1);
+});
+
+test("when the account is not offered the default, the 3.0 model is used; a model the user chose is never swapped", async t => {
+  const { provider } = setup(t);
+  const offer = () => json({ data: [row("a/asr"), row(FALLBACK_TRANSCRIPTION_MODEL)] });
+  t.mock.method(globalThis, "fetch", routedFetch([{ method: "GET", match: "/models?output_modalities=all", respond: offer }, answer("ok")]).mock);
+  for (const model of [undefined, DEFAULT_TRANSCRIPTION_MODEL]) {
+    const result = await provider.transcribeAudioWithContext(ask({ model }));
+    assert.equal(result.value.model, FALLBACK_TRANSCRIPTION_MODEL);
+  }
+  const chosen = await provider.transcribeAudioWithContext(ask({ model: "a/absent" }));
+  assert.equal(chosen.ok, false);
+  assert.match(chosen.error.message, /does not list a\/absent/);
 });
 
 test("a model the live catalogue does not list as transcription is refused with what is offered, before the paid call", async t => {

@@ -2,13 +2,31 @@ import path from "node:path";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import type { OpenClawPluginApi, UnifiedModelCatalogEntry, UnifiedModelCatalogKind } from "openclaw/plugin-sdk/plugin-entry";
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth";
-import { baseUrlFor } from "./auth.js";
-import { BASE_URL, DEFAULT_MODEL, KEY_ENV, PROVIDER_ID, fetchCatalog, officialBaseUrl } from "./catalog.js";
+import { baseUrlFor, resolveApiKey } from "./auth.js";
+import { BASE_URL, DEFAULT_MODEL, KEY_ENV, PROVIDER_ID, fetchCatalog, officialBaseUrl, type CatalogModel } from "./catalog.js";
 import { buildImageProvider } from "./image.js";
 import { fetchImageModels, fetchSpeechModels, fetchVideoModels } from "./media-catalog.js";
 import { buildSpeechProvider } from "./speech.js";
 import { buildUnderstandingProvider } from "./understanding.js";
 import { createVideoProvider, fileJobStore, videoCapabilities } from "./video.js";
+
+/** How long a fetched catalogue is reused when a chat model is resolved. */
+const LIVE_TTL_MS = 10 * 60_000;
+/** The last catalogue fetched for each API base. A model row saved in the config by an older
+ *  install or by hand can be stale (for example text-only for a vision model); OpenClaw compares
+ *  it with the row from this catalogue, and the live row wins. */
+const live = new Map<string, { at: number; models: CatalogModel[] }>();
+
+const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every(kind => b.includes(kind));
+
+function runtimeModel(model: Omit<CatalogModel, "input"> & { input: readonly string[] }, baseUrl: string) {
+  return {
+    id: model.id, name: model.name, reasoning: model.reasoning,
+    contextWindow: model.contextWindow, maxTokens: model.maxTokens, cost: model.cost,
+    input: model.input.filter((kind): kind is "text" | "image" => kind === "text" || kind === "image"),
+    provider: PROVIDER_ID, api: "openai-completions" as const, baseUrl,
+  };
+}
 
 type CatalogContext = Parameters<NonNullable<Parameters<OpenClawPluginApi["registerModelCatalogProvider"]>[0]["liveCatalog"]>>[0];
 
@@ -58,6 +76,7 @@ export default definePluginEntry({
           if (!apiKey || !discoveryApiKey) return null;
           const baseUrl = officialBaseUrl(ctx.config.models?.providers?.[PROVIDER_ID]?.baseUrl ?? BASE_URL);
           const models = await fetchCatalog(baseUrl, discoveryApiKey, ctx.signal);
+          live.set(baseUrl, { at: Date.now(), models });
           return { provider: { baseUrl, apiKey, api: "openai-completions", models } };
         },
       },
@@ -67,12 +86,44 @@ export default definePluginEntry({
         const baseUrl = officialBaseUrl(config?.baseUrl ?? BASE_URL);
         const model = config?.models?.find(row => row.id === ctx.modelId);
         if (!model || !model.input.includes("text")) return;
-        return {
-          id: model.id, name: model.name, reasoning: model.reasoning,
-          contextWindow: model.contextWindow, maxTokens: model.maxTokens, cost: model.cost,
-          input: model.input.filter((kind): kind is "text" | "image" => kind === "text" || kind === "image"),
-          provider: PROVIDER_ID, api: "openai-completions", baseUrl,
-        };
+        return runtimeModel(model, baseUrl);
+      },
+      // A configured row is checked against the live catalogue, so an upgraded install does not
+      // keep the capabilities it saved earlier.
+      preferRuntimeResolvedModel: ctx => ctx.provider === PROVIDER_ID,
+      async prepareDynamicModel(ctx) {
+        if (ctx.provider !== PROVIDER_ID) return;
+        let baseUrl: string;
+        try {
+          baseUrl = officialBaseUrl(ctx.providerConfig?.baseUrl ?? baseUrlFor(ctx.config));
+        } catch {
+          return;
+        }
+        let models = live.get(baseUrl);
+        if (!models || Date.now() - models.at > LIVE_TTL_MS) {
+          try {
+            models = { at: Date.now(), models: await fetchCatalog(baseUrl, await resolveApiKey(ctx.config, ctx.agentDir)) };
+          } catch {
+            return; // No key or no network: the saved row is used, as before.
+          }
+          live.set(baseUrl, models);
+        }
+        const model = models.models.find(row => row.id === ctx.modelId);
+        return model && runtimeModel(model, baseUrl);
+      },
+      // OpenClaw keeps a hand-saved row's input list over the live one, so the input list is set
+      // here, last, from the catalogue fetched above.
+      normalizeResolvedModel(ctx) {
+        if (ctx.provider !== PROVIDER_ID) return;
+        let baseUrl: string;
+        try {
+          baseUrl = officialBaseUrl(ctx.model.baseUrl);
+        } catch {
+          return;
+        }
+        const model = live.get(baseUrl)?.models.find(row => row.id === ctx.model.id);
+        if (!model || same(model.input, ctx.model.input)) return;
+        return { ...ctx.model, input: runtimeModel(model, baseUrl).input };
       },
     });
     api.registerModelCatalogProvider({
