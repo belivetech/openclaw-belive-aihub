@@ -2,7 +2,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { baseUrlFor, isConfigured, resolveApiKey } from "./auth.js";
 import { KEY_ENV, PROVIDER_ID } from "./catalog.js";
 import { bearer, fetchChecked, readLimited, record } from "./http.js";
-import { isWav } from "./sniff.js";
+import { matchesSpeechFormat } from "./sniff.js";
 
 type SpeechProvider = Parameters<OpenClawPluginApi["registerSpeechProvider"]>[0] extends infer P
   ? Exclude<P, (...args: never[]) => unknown> : never;
@@ -14,8 +14,8 @@ const KNOWN_VOICES = ["loongjohn", "longanhuan_v3.6", "longanlingxin", "longanlu
 const MAX_CHARACTERS = 600;
 const MAX_AUDIO_BYTES = 64 * 1024 * 1024;
 const SPEECH_TIMEOUT_MS = 120_000;
-/** Formats a model is known to return besides WAV. Every model starts WAV-only; add a model here only once the gateway documents it. */
-const FORMATS_BY_MODEL: Readonly<Record<string, readonly string[]>> = {};
+/** The `response_format` values the AI Hub speech route answers in. Every model synthesises WAV and the gateway converts it; `ogg` is not offered. */
+const FORMATS = ["mp3", "opus", "aac", "flac", "wav", "pcm"];
 
 const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : undefined;
 
@@ -54,9 +54,8 @@ export function buildSpeechProvider(): SpeechProvider {
       if (length < 1 || length > MAX_CHARACTERS) {
         throw new Error(`BeLive AI Hub speech takes 1 to ${MAX_CHARACTERS} characters per request; this text has ${length}`);
       }
-      const formats = ["wav", ...(FORMATS_BY_MODEL[model] ?? [])];
-      if (!formats.includes(config.responseFormat)) {
-        throw new Error(`BeLive AI Hub speech model ${model} returns ${formats.join(", ")} only; responseFormat "${config.responseFormat}" is not available`);
+      if (!FORMATS.includes(config.responseFormat)) {
+        throw new Error(`BeLive AI Hub speech returns ${FORMATS.join(", ")} only; responseFormat "${config.responseFormat}" is not available`);
       }
       const baseUrl = baseUrlFor(req.cfg);
       const apiKey = await resolveApiKey(req.cfg);
@@ -66,8 +65,8 @@ export function buildSpeechProvider(): SpeechProvider {
         body: JSON.stringify({ model, input: req.text, voice, response_format: config.responseFormat }),
       }, "speech synthesis", { timeoutMs: req.timeoutMs });
       const audio = await readLimited(response, MAX_AUDIO_BYTES, "speech audio");
-      if (config.responseFormat === "wav" && !isWav(audio)) {
-        throw new Error("BeLive AI Hub speech synthesis did not return WAV audio; the request may have been charged, so check Activity before retrying");
+      if (!matchesSpeechFormat(config.responseFormat, audio)) {
+        throw new Error(`BeLive AI Hub speech synthesis did not return ${config.responseFormat.toUpperCase()} audio; the request may have been charged, so check Activity before retrying`);
       }
       return { audioBuffer: audio, outputFormat: config.responseFormat, fileExtension: `.${config.responseFormat}`, voiceCompatible: false };
     },

@@ -31,7 +31,7 @@ function mediaCatalog(
 export default definePluginEntry({
   id: PROVIDER_ID,
   name: "BeLive AI Hub",
-  description: "BeLive AI Hub model, image, video, speech and media-understanding provider",
+  description: "BeLive AI Hub model, image, video, speech, speech-to-text and media-understanding provider",
   register(api) {
     const jobs = fileJobStore(() => path.join(api.runtime.state.resolveStateDir(), PROVIDER_ID, "video-jobs"));
     api.registerProvider({
