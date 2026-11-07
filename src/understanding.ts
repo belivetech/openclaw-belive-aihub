@@ -2,6 +2,7 @@ import type { MediaUnderstandingProviderPlugin } from "openclaw/plugin-sdk/plugi
 import { BASE_URL, DEFAULT_MODEL, PROVIDER_ID, officialBaseUrl } from "./catalog.js";
 import { bearer, fetchJson, record } from "./http.js";
 import { fetchModelInputs } from "./media-catalog.js";
+import { DEFAULT_TRANSCRIPTION_MODEL, createTranscription, type TranscriptionDeps } from "./transcription.js";
 
 const DEFAULT_PROMPT = "Describe the video.";
 
@@ -19,12 +20,15 @@ function replyText(payload: unknown): string | undefined {
  * Media understanding for BeLive AI Hub. Images need no adapter: the host reads them with any
  * `belive-aihub/*` chat model whose catalogue input includes `image`. Video is sent to Chat
  * Completions as a `video_url` part, only for a model whose catalogue input includes `video`.
+ * Audio is transcribed by `POST /audio/transcriptions` (see `transcription.ts`). There is no
+ * `autoPriority`, so the host never selects this provider on its own.
  */
-export function buildUnderstandingProvider(): MediaUnderstandingProviderPlugin {
+export function buildUnderstandingProvider(deps: TranscriptionDeps = {}): MediaUnderstandingProviderPlugin {
   return {
     id: PROVIDER_ID,
-    capabilities: ["image", "video"],
-    defaultModels: { image: DEFAULT_MODEL, video: DEFAULT_MODEL },
+    capabilities: ["image", "video", "audio"],
+    defaultModels: { image: DEFAULT_MODEL, video: DEFAULT_MODEL, audio: DEFAULT_TRANSCRIPTION_MODEL },
+    ...createTranscription(deps),
     describeImage: undefined,
     describeImages: undefined,
     async describeVideo(params) {

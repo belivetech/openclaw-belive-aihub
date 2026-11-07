@@ -421,7 +421,7 @@ test("video: capabilities come from the live catalogue per model", async t => {
 
 // ---------------------------------------------------------------- speech
 
-test("speech asks for WAV, validates the audio and never sends other formats", async t => {
+test("speech asks for WAV by default and validates the audio it gets back", async t => {
   process.env[KEY_ENV] = SECRET;
   const { speech } = setup();
   const provider = speech[0];
@@ -448,7 +448,7 @@ test("speech refuses unsupported options before the paid call and flags non-audi
   const base = { cfg, target: "audio-file", timeoutMs: 5000 };
   await assert.rejects(provider.synthesize({ ...base, text: "x".repeat(601), providerConfig: {} }), /1 to 600 characters.*has 601/);
   await assert.rejects(provider.synthesize({ ...base, text: "", providerConfig: {} }), /1 to 600 characters/);
-  await assert.rejects(provider.synthesize({ ...base, text: "hi", providerConfig: { responseFormat: "mp3" } }), /returns wav only; responseFormat "mp3" is not available/);
+  await assert.rejects(provider.synthesize({ ...base, text: "hi", providerConfig: { responseFormat: "ogg" } }), /returns mp3, opus, aac, flac, wav, pcm only; responseFormat "ogg" is not available/);
   assert.equal(calls.length, 0);
   await assert.rejects(provider.synthesize({ ...base, text: "hi", providerConfig: {} }), /did not return WAV audio; the request may have been charged/);
   // A 600-character text is within the limit even when it is made of multi-unit characters.
@@ -457,12 +457,42 @@ test("speech refuses unsupported options before the paid call and flags non-audi
   assert.equal(calls.length, 2);
 });
 
+test("speech offers mp3, opus, aac, flac, wav and pcm, sends the chosen one and checks the bytes match it", async t => {
+  process.env[KEY_ENV] = SECRET;
+  const { speech } = setup();
+  const provider = speech[0];
+  const samples = {
+    mp3: Buffer.concat([Buffer.from("ID3"), Buffer.alloc(20)]),
+    opus: Buffer.concat([Buffer.from("OggS"), Buffer.alloc(24), Buffer.from("OpusHead"), Buffer.alloc(20)]),
+    aac: Buffer.from([0xff, 0xf1, 0x50, 0x80, 0x02, 0x1f, 0xfc, 0x21, 0x00]),
+    flac: Buffer.concat([Buffer.from("fLaC"), Buffer.alloc(20)]),
+    wav: WAV_BYTES,
+    pcm: Buffer.alloc(64, 7),
+  };
+  let reply = samples.wav;
+  const { mock, calls } = routedFetch([{ method: "POST", match: "/audio/speech", respond: () => new Response(reply) }]);
+  t.mock.method(globalThis, "fetch", mock);
+  const base = { cfg, target: "audio-file", timeoutMs: 5000, text: "hi" };
+  for (const [format, bytes] of Object.entries(samples)) {
+    reply = bytes;
+    const providerConfig = provider.resolveConfig({ cfg, rawConfig: { providers: { [PROVIDER_ID]: { responseFormat: format.toUpperCase() } } }, timeoutMs: 1000 });
+    const result = await provider.synthesize({ ...base, providerConfig });
+    assert.equal(JSON.parse(calls.at(-1).body).response_format, format);
+    assert.deepEqual([result.outputFormat, result.fileExtension, result.audioBuffer.length], [format, `.${format}`, bytes.length]);
+  }
+  // Bytes in another format than the one asked for are flagged, with the charge warning.
+  reply = samples.wav;
+  await assert.rejects(provider.synthesize({ ...base, providerConfig: { responseFormat: "mp3" } }), /did not return MP3 audio; the request may have been charged/);
+  reply = samples.mp3;
+  await assert.rejects(provider.synthesize({ ...base, providerConfig: { responseFormat: "flac" } }), /did not return FLAC audio/);
+});
+
 // ---------------------------------------------------------------- understanding
 
 test("video understanding refuses a model the catalogue does not mark as video-capable, before any paid call", async t => {
   const { understanding } = setup();
   const provider = understanding[0];
-  assert.deepEqual(provider.capabilities, ["image", "video"]);
+  assert.deepEqual(provider.capabilities, ["image", "video", "audio"]);
   assert.equal(provider.describeImage, undefined);
   const { mock, calls } = routedFetch([{ method: "GET", match: "/models", respond: () => json({ data: [
     { id: "a/text-only", architecture: { input_modalities: ["text", "image"] } },

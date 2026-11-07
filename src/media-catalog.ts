@@ -10,6 +10,7 @@ export type VideoModel = {
   frameRoles: string[]; parameters: string[]; acceptsImages: boolean;
 };
 export type SpeechModel = { id: string; name: string };
+export type TranscriptionModel = { id: string; name: string };
 
 function ready(row: Record<string, unknown>, route: string): boolean {
   return Array.isArray(row.endpoints) && row.endpoints.some(item => {
@@ -68,6 +69,11 @@ export function mapSpeechModels(payload: unknown): SpeechModel[] {
   return rows(payload, "audio_speech").map(({ id, name }) => ({ id, name }));
 }
 
+/** Speech-to-text models: rows with a ready `audio_transcriptions` endpoint. */
+export function mapTranscriptionModels(payload: unknown): TranscriptionModel[] {
+  return rows(payload, "audio_transcriptions").map(({ id, name }) => ({ id, name }));
+}
+
 const CATALOG_TIMEOUT_MS = 8000;
 
 function get(baseUrl: string, path: string, apiKey: string, options?: Partial<RequestOptions>) {
@@ -83,6 +89,10 @@ export async function fetchVideoModels(baseUrl: string, apiKey: string, options?
 }
 export async function fetchSpeechModels(baseUrl: string, apiKey: string, options?: Partial<RequestOptions>) {
   return mapSpeechModels(await get(baseUrl, "/models?output_modalities=audio", apiKey, options));
+}
+/** `output_modalities=audio` lists speech synthesis only; speech-to-text rows appear under `all`. */
+export async function fetchTranscriptionModels(baseUrl: string, apiKey: string, options?: Partial<RequestOptions>) {
+  return mapTranscriptionModels(await get(baseUrl, "/models?output_modalities=all", apiKey, options));
 }
 /** Raw chat catalogue rows, used to check a model's input modalities before a paid understanding call. */
 export async function fetchModelInputs(baseUrl: string, apiKey: string, options?: Partial<RequestOptions>) {

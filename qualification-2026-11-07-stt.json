@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-07",
+  "package": "@belivetech/openclaw-belive-aihub@0.3.0",
+  "testedTarballSha256": "6fe84da2f0083560afa1bbef68a99d353e1421d556301d1f43dfc6a6fedc529e",
+  "host": "openclaw@2026.11.1 (4ffdd20), isolated HOME and OPENCLAW_STATE_DIR, Node 26.8.2",
+  "endpoint": "https://api-stg-tokenhub.belive.sg/api/v1",
+  "gateway": "tokenhub-gateway #2292 (multipart POST /audio/transcriptions, speech response_format)",
+  "credential": "BELIVE_TOKENHUB_API_KEY from the environment of a scrubbed process; no auth profile; no other provider key present",
+  "installed": "openclaw plugins install <tarball> --accept-capabilities --force; plugins inspect --runtime: provider, speech, mediaUnderstanding, imageGeneration and videoGeneration registered under belive-aihub",
+  "sourceClip": {
+    "text": "BeLive AI Hub speech to text test. One, two, three, four, five.",
+    "madeWith": "openclaw infer tts convert --local --provider belive-aihub (qwen/qwen-audio-3.0-tts-flash, voice loongjohn)",
+    "wav": "ffprobe: pcm_s16le, 24000 Hz, mono, 7.44 s, 357164 bytes",
+    "mp3": "same command with tts.providers.belive-aihub.responseFormat=mp3; ffprobe: mp3, 24000 Hz, mono, 7.488 s"
+  },
+  "requests": [
+    { "id": "req_e26vgapllpmrxlnj9k23gqoeuu", "step": "speech, wav", "model": "qwen/qwen-audio-3.0-tts-flash", "status": 200, "totalCostUsd": 0.000945 },
+    { "id": "req_4s8egmna8bpgmq0y95mrnuibjq", "step": "speech to text, wav, infer audio transcribe", "model": "qwen/qwen-audio-3.1-asr-flash", "status": 200, "totalCostUsd": 0.00002288, "transcript": "Belive AI hub speech-to-text test: one, two, three, four, five." },
+    { "id": "req_yvkc3acctpjwv0nd4aizi9xrmv", "step": "speech, mp3", "model": "qwen/qwen-audio-3.0-tts-flash", "status": 200, "totalCostUsd": 0.000945 },
+    { "id": "req_qm9fun61sa08ysrhrweggu3jc4", "step": "speech to text, mp3 (default model; --model chose only the provider)", "model": "qwen/qwen-audio-3.1-asr-flash", "status": 200, "totalCostUsd": 0.00002303 },
+    { "id": "req_rrmvtpo8n0ge37bajin6pviat2", "step": "speech to text, wav (default model)", "model": "qwen/qwen-audio-3.1-asr-flash", "status": 200, "totalCostUsd": 0.00002288 },
+    { "id": "req_ur09q34td6f2kjskvwyz2mk91u", "step": "speech to text, wav (default model)", "model": "qwen/qwen-audio-3.1-asr-flash", "status": 200, "totalCostUsd": 0.00002288 },
+    { "id": "req_csrganwwwbn33fs0igph3i49hb", "step": "speech to text, mp3 (default model; a config command had been rejected)", "model": "qwen/qwen-audio-3.1-asr-flash", "status": 200, "totalCostUsd": 0.00002397 },
+    { "id": "req_euxmb0q8o8veqf9x653l1ep1kq", "step": "speech to text, mp3, model chosen in tools.media.models, language en", "model": "openai/gpt-transcribe", "status": 200, "totalCostUsd": 0.0006, "transcript": "Believe AI Hub speech to text test. One, two, three, four, five." }
+  ],
+  "paidRequests": 8,
+  "customerTotalUsd": 0.00260564,
+  "unchargedRequests": [
+    { "id": "req_9vjcb8352t0nfe7urm88ds985v", "step": "first speech attempt with the key file's NAME=value line unparsed", "status": 401 },
+    { "id": "req_eooipz54nrurr817e2yut1yfqi", "step": "direct curl, a PNG sent as the file (the plugin never sends one)", "status": 400, "message": "the recording must be an MP3 or WAV file" }
+  ],
+  "hostBehaviour": [
+    "openclaw infer audio transcribe --model belive-aihub/<model> selects the provider only; the model is the manifest default or the tools.media.models entry. Three requests that named other models ran the default; the tools.media.models entry then selected openai/gpt-transcribe.",
+    "An Ogg/Opus recording was refused by the plugin before any request (no catalogue read, no upload) with: BeLive AI Hub transcription takes MP3 or WAV recordings only; convert the file first.",
+    "A first refusal test ran in a shell that held another vendor's key: OpenClaw's automatic audio selection then passed the refused recording to that vendor. The qualified runs use a scrubbed environment."
+  ],
+  "notExercisedLive": ["a job (202) answer from a long-recording model", "a pasted-key profile", "production"],
+  "note": "Charges are the gateway's /generation total_cost for each request id. No key, header or Authorization value is recorded."
+}

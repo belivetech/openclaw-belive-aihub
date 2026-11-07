@@ -1,6 +1,6 @@
 # BeLive AI Hub for OpenClaw
 
-A release-compatible provider plugin for [BeLive AI Hub](https://aihub.belive.sg/), maintained by BeLive Technology. It adds BeLive models for chat and tools, image generation, video generation, speech and image and video understanding. Requires **OpenClaw 2026.11.1** or later and its supported Node.js runtime. MIT license. Owner contact: Hassan / BeLive Technology; report issues in this repository.
+A release-compatible provider plugin for [BeLive AI Hub](https://aihub.belive.sg/), maintained by BeLive Technology. It adds BeLive models for chat and tools, image generation, video generation, speech, speech to text and image and video understanding. Requires **OpenClaw 2026.11.1** or later and its supported Node.js runtime. MIT license. Owner contact: Hassan / BeLive Technology; report issues in this repository.
 
 ## Install and sign in
 
@@ -48,7 +48,7 @@ Prices are converted from per-token API rates to OpenClaw's per-million-token UI
 
 The default endpoint is `https://tokenhub-api.belive.sg/api/v1`. For isolated staging qualification, explicitly configure `models.providers.belive-aihub.baseUrl` as `https://api-stg-tokenhub.belive.sg/api/v1` and use a staging key. Catalog requests accept only those two official HTTPS bases, refuse redirects, have an eight-second deadline and a bounded response size. Completion transport and user overrides are host-owned; configure only an endpoint you intend to trust with the key.
 
-## Media: images, video, speech and understanding
+## Media: images, video, speech, speech to text and understanding
 
 The plugin registers native BeLive AI Hub adapters for OpenClaw's media features under the same provider id, `belive-aihub`, and the same credential as chat. They never use another provider's identity, settings or credentials: a missing BeLive key fails with a message naming `BELIVE_TOKENHUB_API_KEY`, before any request.
 
@@ -57,6 +57,7 @@ The plugin registers native BeLive AI Hub adapters for OpenClaw's media features
 | Image generation | `agents.defaults.mediaModels.image` | `belive-aihub/qwen/qwen-image-2.1-turbo` | `POST /images/generations` |
 | Video generation | `agents.defaults.mediaModels.video` | `belive-aihub/alibaba/wan3.0-video` | `POST /videos`, poll, download |
 | Speech (text to speech) | `tts.provider` and `tts.providers.belive-aihub` | `qwen/qwen-audio-3.0-tts-flash` | `POST /audio/speech` |
+| Speech to text | `tools.media.models` (`capabilities: ["audio"]`) | `qwen/qwen-audio-3.1-asr-flash` | `POST /audio/transcriptions` |
 | Image understanding | any chat model whose input includes `image` | `belive-aihub/z-ai/glm-5.3-flash` | Chat Completions |
 | Video understanding | any chat model whose input includes `video` | `belive-aihub/qwen/qwen3.8-flash` | Chat Completions |
 
@@ -73,6 +74,11 @@ The plugin registers native BeLive AI Hub adapters for OpenClaw's media features
   "tts": {
     "provider": "belive-aihub",
     "providers": { "belive-aihub": { "model": "qwen/qwen-audio-3.0-tts-flash", "voice": "loongjohn" } }
+  },
+  "tools": {
+    "media": {
+      "models": [{ "provider": "belive-aihub", "model": "qwen/qwen-audio-3.1-asr-flash", "capabilities": ["audio"] }]
+    }
   }
 }
 ```
@@ -81,6 +87,7 @@ The plugin registers native BeLive AI Hub adapters for OpenClaw's media features
 openclaw infer image generate --model belive-aihub/qwen/qwen-image-2.1-turbo --prompt "A red apple on a white table" --size 1024x1024 --output apple.png
 openclaw infer video generate --model belive-aihub/alibaba/wan3.0-video --prompt "A red balloon floating upward" --resolution 480P --duration 2 --output balloon.mp4
 openclaw infer tts convert --local --provider belive-aihub --text "Hello from AI Hub." --output hello.wav
+openclaw infer audio transcribe --file hello.wav --model belive-aihub/qwen/qwen-audio-3.1-asr-flash
 openclaw infer image describe --file photo.png --model belive-aihub/z-ai/glm-5.3-flash
 openclaw infer video describe --file clip.mp4 --model belive-aihub/qwen/qwen3.8-flash
 ```
@@ -94,7 +101,9 @@ Run `openclaw models list --provider belive-aihub --refresh` once after installi
 - **Endpoint.** Production unless `models.providers.belive-aihub.baseUrl` is the official staging base, as for chat. Only those two HTTPS bases are accepted.
 - **Images** return one image per request (`n` is 1 on every model). Reference images go to the models that list `input_references`. An image request is never resubmitted automatically, because a rerun is a new charge.
 - **Video is resumable and idempotent.** Each submit carries an `Idempotency-Key`, and the key and job ID are saved in one small JSON file per in-flight request under the OpenClaw state directory (`belive-aihub/video-jobs/`; no credential, removed when the video is saved). A call waits at least 15 minutes. If the process is interrupted, or the wait ends, running the same request again resumes the saved job: it looks the job up by key and polls and downloads it; it does not create a second one. A failed, cancelled or expired job ends the call and clears the record, so the next run is a new job. Frame images (`first_frame`, `last_frame`) and reference images are supported where the model lists them. Reference video and audio inputs, such as Kling Motion Control, are not.
-- **Speech** takes 1 to 600 characters per request and asks for `wav`, the format the AI Hub speech route guarantees today; another `responseFormat` is refused before the request. Voice names are case-sensitive and belong to a model, so set `voice` to one the model supports (`loongjohn` for the Qwen models). OpenClaw lists `loongjohn`, `longanhuan_v3.6`, `longanlingxin` and `longanlufeng` as voice hints.
+- **Speech** takes 1 to 600 characters per request and asks for `wav` unless `tts.providers.belive-aihub.responseFormat` is `mp3`, `opus`, `aac`, `flac`, `wav` or `pcm` (`pcm` is raw 24 kHz mono 16-bit samples). AI Hub converts the model's WAV, so every model offers every format; `ogg` and anything else is refused before the request, and bytes that are not the format asked for are reported as a possible charge. Voice names are case-sensitive and belong to a model, so set `voice` to one the model supports (`loongjohn` for the Qwen models). OpenClaw lists `loongjohn`, `longanhuan_v3.6`, `longanlingxin` and `longanlufeng` as voice hints.
+- **Speech to text** uploads a WAV or MP3 recording (recognised by its bytes, not its name; 1 to 25,000,000 bytes) as multipart to `POST /audio/transcriptions` and returns the text. It sends only `model` and, if you set one, a two-letter `language` (`en-US` is sent as `en`). AI Hub refuses a `prompt`, so the host's prompt hint and extra query values are not sent. Models come from the account's live catalogue (`GET /models?output_modalities=all`, rows with a ready `audio_transcriptions` endpoint, which is where AI Hub lists speech-to-text models); a model that is not listed is refused with the list of what is, before the upload. The default is `qwen/qwen-audio-3.1-asr-flash`. OpenClaw 2026.11.1 chooses the model from `tools.media.models`, or this default: `openclaw infer audio transcribe --model belive-aihub/...` selects the provider only, so use the `tools.media.models` entry above to pick another model such as `openai/gpt-transcribe`. Each model has its own length, size and language limits, which AI Hub enforces before charging. A long-recording model such as `qwen/qwen-audio-3.1-asr-flash-filetrans` may answer after about a minute with a job; the plugin then reads that job until the audio timeout (`tools.media.audio.timeoutSeconds`, 60 s by default) and never uploads the recording a second time, because every upload is a new charge. Once the upload has begun, any failure (for example a 400) stops the request and is not retried.
+- **Voice notes and fallback.** The plugin has no `autoPriority`, so OpenClaw does not choose it by itself, but when BeLive AI Hub is the active chat provider, OpenClaw's automatic audio transcription tries it first. A recording it cannot take before any upload (Ogg/Opus voice notes, files over 25,000,000 bytes, an unlisted model, a missing key) is handed back to OpenClaw, whose own selection may then try another transcription provider you configured; the plugin never sends a recording anywhere else itself. To keep such recordings off other services, configure no other audio provider.
 - **Video understanding** sends the clip inline as a `video_url` part, only to a model whose catalogue input includes `video`. Image understanding needs no adapter: OpenClaw reads images with any `belive-aihub/*` chat model that lists `image`.
 
 ### Supported clients
@@ -106,15 +115,16 @@ Every feature needs the plugin's floor, OpenClaw **2026.11.1**; it was built and
 | Chat, tools, live model discovery (0.1.x) | 2026.11.1 | |
 | Image generation and reference-image edits | 2026.11.1 | Edits only on models listing `input_references` |
 | Video generation, resume, idempotent submit | 2026.11.1 | Text to video, first and last frame, reference images |
-| Speech (WAV) | 2026.11.1 | Named voices on `/audio/speech` |
+| Speech (WAV, MP3, Opus, AAC, FLAC, PCM) | 2026.11.1 | Named voices on `/audio/speech`; `responseFormat` in the `tts` block |
+| Speech to text (WAV, MP3) | 2026.11.1 | Models listed by the live catalogue; chosen in `tools.media.models` |
 | Image understanding | 2026.11.1 | Through the chat model |
 | Video understanding | 2026.11.1 | Models whose input includes `video` |
 | Media model pickers | 2026.11.1 | Image, video and speech rows |
-| Speech to text, music, MiMo chat-route TTS, speech jobs, saved characters, webhooks | not provided | Different AI Hub contracts; use the API directly |
+| Other recording formats (Ogg, M4A), music, MiMo chat-route TTS, speech jobs, saved characters, webhooks | not provided | Different AI Hub contracts; convert to WAV or MP3, or use the API directly |
 
 ## Migration
 
-The existing BeLive custom-provider guide uses `TOKENHUB_API_KEY` and a `tokenhub/` model prefix. For this plugin, make the BeLive key available through supported host auth or `BELIVE_TOKENHUB_API_KEY`, and deliberately change BeLive model references to `belive-aihub/<author>/<slug>`. Replace literal environment references `${TOKENHUB_API_KEY}` with `${BELIVE_TOKENHUB_API_KEY}` in any retained BeLive custom/media configuration. If you pointed `litellm` (images), `openrouter` (video) or `openai` (speech) at AI Hub, switch those settings to `belive-aihub/...` references and the `tts.providers.belive-aihub` block above, then restore each of those providers to its own service: they no longer need to carry a BeLive key or base URL, and this plugin does not change them. Preserve Tencent's variable and connection if you also use that separate service. Do not copy a key into an example command.
+The existing BeLive custom-provider guide uses `TOKENHUB_API_KEY` and a `tokenhub/` model prefix. For this plugin, make the BeLive key available through supported host auth or `BELIVE_TOKENHUB_API_KEY`, and deliberately change BeLive model references to `belive-aihub/<author>/<slug>`. Replace literal environment references `${TOKENHUB_API_KEY}` with `${BELIVE_TOKENHUB_API_KEY}` in any retained BeLive custom/media configuration. If you pointed `litellm` (images), `openrouter` (video) or `openai` (speech or transcription) at AI Hub, switch those settings to `belive-aihub/...` references and the `tts.providers.belive-aihub` block above, then restore each of those providers to its own service: they no longer need to carry a BeLive key or base URL, and this plugin does not change them. Preserve Tencent's variable and connection if you also use that separate service. Do not copy a key into an example command.
 
 Existing custom-provider connections remain supported independently of this plugin. Do not retain two competing configurations for the same default model. Review auxiliary/media/fallback settings separately before switching.
 
@@ -122,7 +132,7 @@ Existing custom-provider connections remain supported independently of this plug
 
 Use the host's plugin update/uninstall commands. To return to a custom connection, disable/remove `belive-aihub`, restore your deliberately backed-up BeLive provider settings and restart. The plugin does not delete or revoke keys.
 
-The plugin performs model-list requests and normal host-managed inference to BeLive, and sends image, video, speech and video-understanding requests itself to the same two official endpoints. It reads credentials only through OpenClaw's provider auth helpers and `BELIVE_TOKENHUB_API_KEY`, and never reads another provider's. Its only local state is the in-flight video job file described above. It has no telemetry, updater, credential-file reader or background process, and does not rewrite foreign providers.
+The plugin performs model-list requests and normal host-managed inference to BeLive, and sends image, video, speech, transcription and video-understanding requests itself to the same two official endpoints. It reads credentials only through OpenClaw's provider auth helpers and `BELIVE_TOKENHUB_API_KEY`, and never reads another provider's. Its only local state is the in-flight video job file described above. It has no telemetry, updater, credential-file reader or background process, and does not rewrite foreign providers.
 
 ```sh
 npm run typecheck

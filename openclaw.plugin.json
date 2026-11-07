@@ -1,7 +1,7 @@
 {
   "id": "belive-aihub",
   "name": "BeLive AI Hub",
-  "description": "BeLive AI Hub model provider, with image, video and speech generation and media understanding, for OpenClaw",
+  "description": "BeLive AI Hub model provider, with image, video and speech generation, speech to text and media understanding, for OpenClaw",
   "categories": ["models"],
   "providers": ["belive-aihub"],
   "contracts": {
@@ -12,8 +12,8 @@
   },
   "mediaUnderstandingProviderMetadata": {
     "belive-aihub": {
-      "capabilities": ["image", "video"],
-      "defaultModels": { "image": "qwen/qwen3.8-flash", "video": "qwen/qwen3.8-flash" }
+      "capabilities": ["image", "video", "audio"],
+      "defaultModels": { "image": "qwen/qwen3.8-flash", "video": "qwen/qwen3.8-flash", "audio": "qwen/qwen-audio-3.1-asr-flash" }
     }
   },
   "providerEndpoints": [{
