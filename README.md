@@ -107,6 +107,24 @@ Run `openclaw models list --provider belive-aihub --refresh` once after installi
 - **Voice notes and fallback.** The plugin has no `autoPriority`, so OpenClaw does not choose it by itself, but when BeLive AI Hub is the active chat provider, OpenClaw's automatic audio transcription tries it first. A recording it cannot take before any upload (Ogg/Opus voice notes, files over 25,000,000 bytes, an unlisted model, a missing key) is handed back to OpenClaw, whose own selection may then try another transcription provider you configured; the plugin never sends a recording anywhere else itself. With no audio entry in `tools.media.models`, OpenClaw picks transcription providers automatically from every key it finds (for example a Google or OpenAI key), so a recording can reach another service. To keep recordings on AI Hub only, add the single `belive-aihub` audio entry shown above to `tools.media.models` and no other audio entry: OpenClaw then tries only the entries listed.
 - **Video understanding** sends the clip inline as a `video_url` part, only to a model whose catalogue input includes `video`. Image understanding needs no adapter: OpenClaw reads images with any `belive-aihub/*` chat model that lists `image`.
 
+### Diagnostics and request counts by feature
+
+A request id is shown only where OpenClaw's result type has room for it. "Attempts" counts HTTP requests to AI Hub in one call; "jobs" and "charges" count what AI Hub creates and bills.
+
+| Feature | Request id on success | Request id on failure | Attempts per call | Jobs and charges |
+| --- | --- | --- | --- | --- |
+| Image generation | `metadata.requestId` | Yes | 1, never retried | At most 1 charge |
+| Video generation | `metadata.generationId` and `jobId` | Yes | Up to 3 submits per run, all with one `Idempotency-Key`, only after a 429, 5xx or dropped connection, with a lookup by key before each retry; then polls and one download | 1 job per key, charged once (staging, 2026-11-07: interrupted and rerun, one submit, one charge) |
+| Speech | None: OpenClaw 2026.11.1's speech result has no metadata field | Yes | 1, never retried | At most 1 charge |
+| Speech to text | None, for the same reason | Yes | 1 upload, never retried; a job answer is polled, not re-uploaded | At most 1 charge |
+| Video understanding | None: the result is text only | Yes | 1, never retried | At most 1 charge |
+| Chat and image understanding | Not added: OpenClaw's own transport | OpenClaw's own message | Set by OpenClaw, including its retries | Each attempt is a separate charge |
+
+For support:
+- **Completed request:** look it up with `GET /generation?id=<id>` (model, provider, cost).
+- **Request AI Hub refused before running it** (`GET /generation` answers 404): it was not charged. Quote the id from the error to BeLive support.
+- **Speech, speech to text and chat that succeeded:** find them in Activity by time and model.
+
 ### Supported clients
 
 Every feature needs the plugin's floor, OpenClaw **2026.11.1**; it was built and tested against that release only (`peerDependencies: openclaw >=2026.11.1 <2027`).
