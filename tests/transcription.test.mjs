@@ -255,9 +255,9 @@ test("an answer that is not understood is flagged as possibly charged", async t 
   }
   t.mock.restoreAll();
   const done = setup(t, [
-    { method: "POST", match: "/audio/transcriptions", respond: () => json({ id: "job_8", status: "completed" }, 202) },
+    { method: "POST", match: "/audio/transcriptions", respond: () => json({ id: "job_8", status: "completed" }, 202, { "x-generation-id": "req_stt00000000000000000000001" }) },
   ]);
-  await assert.rejects(done.provider.transcribeAudioWithContext(ask()), /finished without text; the request may have been charged/);
+  await assert.rejects(done.provider.transcribeAudioWithContext(ask()), /finished without text; the request may have been charged.*\(AI Hub request req_stt00000000000000000000001\)$/);
 });
 
 test("an empty transcript is returned as empty text, not an error", async t => {

@@ -1,7 +1,7 @@
 import type { MediaUnderstandingProviderPlugin } from "openclaw/plugin-sdk/plugin-entry";
 import { isConfigured, resolveApiKey } from "./auth.js";
 import { BASE_URL, officialBaseUrl } from "./catalog.js";
-import { bearer, fetchJson, record } from "./http.js";
+import { bearer, fetchJson, fetchJsonWithId, record, withRequestId } from "./http.js";
 import { fetchTranscriptionModels } from "./media-catalog.js";
 import { sniffTranscriptionAudio } from "./sniff.js";
 
@@ -75,9 +75,9 @@ function readJob(payload: unknown): Job | undefined {
 export function createTranscription(deps: TranscriptionDeps = {}): Pick<MediaUnderstandingProviderPlugin, "isAudioConfigured" | "transcribeAudioWithContext"> {
   const pollIntervalMs = deps.pollIntervalMs ?? 2000;
 
-  async function finish(first: unknown, plan: Awaited<ReturnType<typeof prepare>>, ctx: Context, started: number) {
+  async function finish(first: unknown, requestId: string | undefined, plan: Awaited<ReturnType<typeof prepare>>, ctx: Context, started: number) {
     const { baseUrl, apiKey, model } = plan;
-    const lost = (detail: string) => new Error(`BeLive AI Hub transcription ${detail}; the request may have been charged, so check Activity before retrying`);
+    const lost = (detail: string) => new Error(withRequestId(`BeLive AI Hub transcription ${detail}; the request may have been charged, so check Activity before retrying`, requestId));
     const direct = record(first)?.text;
     if (typeof direct === "string") return { text: direct, model };
     let job = readJob(first);
@@ -89,7 +89,7 @@ export function createTranscription(deps: TranscriptionDeps = {}): Pick<MediaUnd
         return { text: job.text, model };
       }
       if (job.status === "failed" || job.status === "expired") {
-        throw new Error(`BeLive AI Hub transcription ${job.status}${job.message ? `: ${job.message}` : ""}`);
+        throw new Error(withRequestId(`BeLive AI Hub transcription ${job.status}${job.message ? `: ${job.message}` : ""}`, requestId));
       }
       if (job.status !== "pending" && job.status !== "in_progress") throw lost(`returned job status "${job.status}"`);
       if (ctx.signal?.aborted) throw new Error("BeLive AI Hub transcription was cancelled");
@@ -121,9 +121,9 @@ export function createTranscription(deps: TranscriptionDeps = {}): Pick<MediaUnd
       if (plan.language) form.set("language", plan.language);
       form.set("file", new Blob([new Uint8Array(plan.bytes)], { type: plan.type }), plan.type === "audio/wav" ? "recording.wav" : "recording.mp3");
       // The one paid request. A refusal (400) or any other failure throws and is never retried here.
-      const first = await fetchJson(`${plan.baseUrl}/audio/transcriptions`, { method: "POST", headers: bearer(plan.apiKey), body: form },
+      const first = await fetchJsonWithId(`${plan.baseUrl}/audio/transcriptions`, { method: "POST", headers: bearer(plan.apiKey), body: form },
         "transcription", { timeoutMs: ctx.timeoutMs, signal: ctx.signal });
-      return { ok: true, value: await finish(first, plan, ctx, started) };
+      return { ok: true, value: await finish(first.payload, first.requestId, plan, ctx, started) };
     },
   };
 }

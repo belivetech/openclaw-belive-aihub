@@ -96,6 +96,7 @@ Run `openclaw models list --provider belive-aihub --refresh` once after installi
 
 ### How the media adapters behave
 
+- **Request ids for support.** Every media failure that reached AI Hub ends with `(AI Hub request <id>)`, the gateway's `X-Generation-Id`; image results carry it as `metadata.requestId`, and video results as `metadata.generationId` with the `jobId`. Look a completed request up with `GET /generation?id=<id>` (model, provider, cost); a request AI Hub refused before running it is not charged and is not listed there, so quote its id to BeLive support. Chat requests run through OpenClaw itself; find those in Activity.
 - **Live catalogues.** Image, video and speech models come from the account's own `GET /images/models`, `GET /videos/models` and `GET /models?output_modalities=audio`; the pickers list the same rows. Nothing is bundled, so a model AI Hub adds is usable without a plugin release. A model that is not listed, or an option the model does not offer (size, aspect ratio, resolution, duration, audio, seed, reference images), is refused with the list of what the model does offer, before any paid request.
 - **Credentials.** The key is a saved BeLive AI Hub auth profile (for example `openclaw models auth paste-api-key --provider belive-aihub`), else `BELIVE_TOKENHUB_API_KEY`. The env var's name, which OpenClaw stores as a stand-in, is never sent as a key.
 - **Endpoint.** Production unless `models.providers.belive-aihub.baseUrl` is the official staging base, as for chat. Only those two HTTPS bases are accepted.

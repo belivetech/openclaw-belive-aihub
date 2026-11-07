@@ -1,7 +1,7 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { baseUrlFor, isConfigured, resolveApiKey } from "./auth.js";
 import { KEY_ENV, PROVIDER_ID } from "./catalog.js";
-import { bearer, fetchChecked, readLimited, record } from "./http.js";
+import { bearer, fetchChecked, readLimited, record, requestIdOf, withRequestId } from "./http.js";
 import { matchesSpeechFormat } from "./sniff.js";
 
 type SpeechProvider = Parameters<OpenClawPluginApi["registerSpeechProvider"]>[0] extends infer P
@@ -66,7 +66,7 @@ export function buildSpeechProvider(): SpeechProvider {
       }, "speech synthesis", { timeoutMs: req.timeoutMs });
       const audio = await readLimited(response, MAX_AUDIO_BYTES, "speech audio");
       if (!matchesSpeechFormat(config.responseFormat, audio)) {
-        throw new Error(`BeLive AI Hub speech synthesis did not return ${config.responseFormat.toUpperCase()} audio; the request may have been charged, so check Activity before retrying`);
+        throw new Error(withRequestId(`BeLive AI Hub speech synthesis did not return ${config.responseFormat.toUpperCase()} audio; the request may have been charged, so check Activity before retrying`, requestIdOf(response)));
       }
       return { audioBuffer: audio, outputFormat: config.responseFormat, fileExtension: `.${config.responseFormat}`, voiceCompatible: false };
     },

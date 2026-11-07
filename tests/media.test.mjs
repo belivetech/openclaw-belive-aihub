@@ -161,10 +161,11 @@ test("image generation sends the model's own geometry, decodes the bytes and rep
   const { image } = setup();
   const { mock, calls } = routedFetch([
     { method: "GET", match: "/images/models", respond: () => json({ data: [imageRow()] }) },
-    { method: "POST", match: "/images/generations", respond: () => json({ data: [{ b64_json: PNG_BASE64, revised_prompt: "y" }] }) },
+    { method: "POST", match: "/images/generations", respond: () => json({ data: [{ b64_json: PNG_BASE64, revised_prompt: "y" }] }, 200, { "x-generation-id": "req_fixture0000000000000000001" }) },
   ]);
   t.mock.method(globalThis, "fetch", mock);
   const result = await image[0].generateImage({ provider: PROVIDER_ID, model: "qwen/img", prompt: "a red apple", cfg, agentDir, size: "1360x768" });
+  assert.deepEqual(result.metadata, { requestId: "req_fixture0000000000000000001" });
   const post = calls.find(call => call.method === "POST");
   assert.equal(post.url, STAGING_URL + "/images/generations");
   assert.deepEqual(JSON.parse(post.body), { model: "qwen/img", prompt: "a red apple", size: "1360x768" });
@@ -212,7 +213,7 @@ test("reference images go to models that take them, as data URIs", async t => {
 test("image errors keep the gateway's message but never the key, and an unusable body is flagged as possibly charged", async t => {
   process.env[KEY_ENV] = SECRET;
   const { image } = setup();
-  let reply = () => json({ error: { message: "size not offered" } }, 400);
+  let reply = () => json({ error: { message: "size not offered" } }, 400, { "x-generation-id": "req_refused000000000000000001" });
   const { mock, calls } = routedFetch([
     { method: "GET", match: "/images/models", respond: () => json({ data: [imageRow()] }) },
     { method: "POST", match: "/images/generations", respond: () => reply() },
@@ -220,12 +221,16 @@ test("image errors keep the gateway's message but never the key, and an unusable
   t.mock.method(globalThis, "fetch", mock);
   const req = { provider: PROVIDER_ID, model: "qwen/img", prompt: "x", cfg, agentDir };
   const failure = await image[0].generateImage(req).catch(error => error);
-  assert.match(failure.message, /^BeLive AI Hub image generation returned HTTP 400: size not offered$/);
+  assert.match(failure.message, /^BeLive AI Hub image generation returned HTTP 400: size not offered \(AI Hub request req_refused000000000000000001\)$/);
+  assert.equal(failure.requestId, "req_refused000000000000000001");
   assert.ok(!failure.message.includes(SECRET));
-  reply = () => json({ data: [{ b64_json: Buffer.from("garbage").toString("base64") }] });
-  await assert.rejects(image[0].generateImage(req), /may have been charged/);
+  reply = () => json({ data: [{ b64_json: Buffer.from("garbage").toString("base64") }] }, 200, { "x-generation-id": "req_charged000000000000000001" });
+  await assert.rejects(image[0].generateImage(req), /may have been charged, so check Activity before retrying \(AI Hub request req_charged000000000000000001\)$/);
+  // A header that is not a plain id is not repeated into the message.
+  reply = () => json({ error: { message: "busy" } }, 400, { "x-generation-id": "req bad<script>" });
+  assert.match((await image[0].generateImage(req).catch(error => error)).message, /HTTP 400: busy$/);
   // A failed paid request is never resubmitted by the plugin.
-  assert.equal(calls.filter(call => call.method === "POST").length, 2);
+  assert.equal(calls.filter(call => call.method === "POST").length, 3);
 });
 
 // ---------------------------------------------------------------- video
@@ -442,7 +447,7 @@ test("speech refuses unsupported options before the paid call and flags non-audi
   process.env[KEY_ENV] = SECRET;
   const { speech } = setup();
   const provider = speech[0];
-  let body = () => new Response("not audio");
+  let body = () => new Response("not audio", { headers: { "x-generation-id": "req_speech0000000000000000001" } });
   const { mock, calls } = routedFetch([{ method: "POST", match: "/audio/speech", respond: () => body() }]);
   t.mock.method(globalThis, "fetch", mock);
   const base = { cfg, target: "audio-file", timeoutMs: 5000 };
@@ -450,7 +455,7 @@ test("speech refuses unsupported options before the paid call and flags non-audi
   await assert.rejects(provider.synthesize({ ...base, text: "", providerConfig: {} }), /1 to 600 characters/);
   await assert.rejects(provider.synthesize({ ...base, text: "hi", providerConfig: { responseFormat: "ogg" } }), /returns mp3, opus, aac, flac, wav, pcm only; responseFormat "ogg" is not available/);
   assert.equal(calls.length, 0);
-  await assert.rejects(provider.synthesize({ ...base, text: "hi", providerConfig: {} }), /did not return WAV audio; the request may have been charged/);
+  await assert.rejects(provider.synthesize({ ...base, text: "hi", providerConfig: {} }), /did not return WAV audio; the request may have been charged.*\(AI Hub request req_speech0000000000000000001\)$/);
   // A 600-character text is within the limit even when it is made of multi-unit characters.
   body = () => new Response(WAV_BYTES);
   await provider.synthesize({ ...base, text: "语".repeat(600), providerConfig: {} });
@@ -529,8 +534,8 @@ test("video understanding fails clearly when the answer has no text", async t =>
   const { understanding } = setup();
   const { mock } = routedFetch([
     { method: "GET", match: "/models", respond: () => json({ data: [{ id: "a/video", architecture: { input_modalities: ["text", "video"] } }] }) },
-    { method: "POST", match: "/chat/completions", respond: () => json({ choices: [{ message: { content: [] } }] }) },
+    { method: "POST", match: "/chat/completions", respond: () => json({ choices: [{ message: { content: [] } }] }, 200, { "x-generation-id": "req_video0000000000000000001" }) },
   ]);
   t.mock.method(globalThis, "fetch", mock);
-  await assert.rejects(understanding[0].describeVideo({ apiKey: SECRET, buffer: MP4_BYTES, fileName: "c.mp4", timeoutMs: 5000, baseUrl: STAGING_URL, model: "a/video" }), /returned no text/);
+  await assert.rejects(understanding[0].describeVideo({ apiKey: SECRET, buffer: MP4_BYTES, fileName: "c.mp4", timeoutMs: 5000, baseUrl: STAGING_URL, model: "a/video" }), /returned no text \(AI Hub request req_video0000000000000000001\)$/);
 });

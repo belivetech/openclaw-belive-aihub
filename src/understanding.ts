@@ -1,6 +1,6 @@
 import type { MediaUnderstandingProviderPlugin } from "openclaw/plugin-sdk/plugin-entry";
 import { BASE_URL, DEFAULT_MODEL, PROVIDER_ID, officialBaseUrl } from "./catalog.js";
-import { bearer, fetchJson, record } from "./http.js";
+import { bearer, fetchJsonWithId, record, withRequestId } from "./http.js";
 import { fetchModelInputs } from "./media-catalog.js";
 import { DEFAULT_TRANSCRIPTION_MODEL, createTranscription, type TranscriptionDeps } from "./transcription.js";
 
@@ -40,7 +40,7 @@ export function buildUnderstandingProvider(deps: TranscriptionDeps = {}): MediaU
         throw new Error(`BeLive AI Hub does not list ${model} as a model that accepts video`);
       }
       const mime = params.mime?.trim() || "video/mp4";
-      const payload = await fetchJson(baseUrl + "/chat/completions", {
+      const { payload, requestId } = await fetchJsonWithId(baseUrl + "/chat/completions", {
         method: "POST",
         headers: bearer(params.apiKey, { "Content-Type": "application/json" }),
         body: JSON.stringify({
@@ -55,7 +55,7 @@ export function buildUnderstandingProvider(deps: TranscriptionDeps = {}): MediaU
         }),
       }, "video understanding", { timeoutMs: params.timeoutMs, signal: params.signal });
       const text = replyText(payload);
-      if (!text) throw new Error("BeLive AI Hub video understanding returned no text");
+      if (!text) throw new Error(withRequestId("BeLive AI Hub video understanding returned no text", requestId));
       return { text, model };
     },
   };
