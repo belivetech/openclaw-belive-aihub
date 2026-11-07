@@ -118,3 +118,27 @@ The clip was made by the plugin's own speech adapter from "BeLive AI Hub speech 
 ### Registry record
 
 ClawHub published 0.3.0 on 2026-11-07 from source commit `81cb0a1a679eff4e5b019fd3d27d2f0b36271efb` (`main`) with tag `latest`; ClawScan reported **clean**. The registry reports community distribution, artifact-only verification and source-linked metadata, as for earlier versions. The published archive SHA-256 is `5678aa06341dc1874b44b5925b149f01e2c791585b95275765ce188ad629d355`. The archive is the registry's zip of this repository's package files, so it differs from the tested tarball above in container format, `README.md` and `VALIDATION.md`; `dist/`, `openclaw.plugin.json` and `package.json` were built from the same commit as the tested tarball's. A fresh install of the published 0.3.0 from the registry was not repeated.
+
+## Version 0.3.1
+
+Fixes two faults a customer test reported on 2026-11-07, and checks the upgrade of an existing configured install rather than only a fresh one.
+
+**Vision on an existing install.** OpenClaw resolves a chat model from the row saved in `models.providers.belive-aihub.models` when one exists. A row saved by the 2026-09 custom-provider recipe, an older plugin or by hand can be text-only for a vision model, and OpenClaw then sends no image, while the model picker (which reads the live catalogue) shows image support. In `openclaw@2026.11.1` a discovered model's details replace a saved row's only when the row came from `models add` (`model.configured-overrides.ts`), so the plugin now uses three provider hooks: `preferRuntimeResolvedModel` makes OpenClaw consult the plugin for a saved row, `prepareDynamicModel` fetches the live catalogue (at most once every 10 minutes per API base, with the BeLive key only), and `normalizeResolvedModel` sets the resolved model's input list from that catalogue. The saved config is not rewritten. Without a key or network the saved row is used as before.
+
+**Speech-to-text default.** The default, `qwen/qwen-audio-3.1-asr-flash`, was live on staging only, so a production key was refused before upload and OpenClaw's automatic audio selection passed the recording to another provider whose key was in the environment. When the account's catalogue does not offer the default, the plugin now uses `qwen/qwen-audio-3.0-asr-flash`; a model the user chose is never swapped. The README now says how to keep recordings on AI Hub only: a single `belive-aihub` audio entry in `tools.media.models`, because OpenClaw then tries only the listed entries (`resolveModelEntries` in `media-understanding/runner.ts`).
+
+- `npm run typecheck`: passed. `npm test`: **59 passed, 0 failed** (56 existing, 3 new) under Node 24.16.0 after a clean build. The new tests cover a text-only saved row resolving with the live catalogue's image input through all three hooks, one catalogue fetch per reuse window, a retired model left to its saved row, no request without a key, and the transcription fallback for the default only.
+
+### Upgrade of a configured install on staging
+
+A fresh `HOME` and `OPENCLAW_STATE_DIR` for released `openclaw@2026.11.1` under Node 24.16.0, with only `BELIVE_TOKENHUB_API_KEY` (staging) in the environment. Published 0.3.0 was installed from ClawHub; the config then received a `belive-aihub` provider block on the staging base with a text-only `qwen/qwen3.8-flash` row, and that model as the default. The packed 0.3.1 tarball was then installed over it with `plugins install <tarball> --force`; the `models` config was byte-for-byte unchanged afterwards.
+
+| Step | Version | Result |
+| --- | --- | --- |
+| `infer model inspect` | 0.3.0 | `input: ["text"]` |
+| `infer model run --local --file red.png` ("one word for the colour") | 0.3.0 | "Unknown": no image sent |
+| Same | 0.3.1 | "Red" |
+| Same with `blue.png` | 0.3.1 | "Blue" |
+| `infer audio transcribe --file clip.wav` (default model) | 0.3.1 | `qwen/qwen-audio-3.1-asr-flash`, "Belive AI hub speech-to-text test: one, two, three, four, five.", `req_gbl03yd131kw3v2ils81g6mtbn`, USD 0.00002288 |
+
+Six paid staging requests in all: five short vision turns on `qwen/qwen3.8-flash` (the CLI does not print their request ids) and one transcription. The vision turns were the 0.3.0 run, two runs of an earlier 0.3.1 build without `normalizeResolvedModel` (answers "white" and "Unknown": no image sent, which is how the `models add` limitation was found), and the two above. The production fallback to 3.0 is covered by the mocked test only, because staging offers 3.1.

@@ -9,6 +9,8 @@ type WithContext = NonNullable<MediaUnderstandingProviderPlugin["transcribeAudio
 type Context = Parameters<WithContext>[0];
 
 export const DEFAULT_TRANSCRIPTION_MODEL = "qwen/qwen-audio-3.1-asr-flash";
+/** Used in place of the default when the account's catalogue does not offer the default. */
+export const FALLBACK_TRANSCRIPTION_MODEL = "qwen/qwen-audio-3.0-asr-flash";
 /** OpenAI's upload limit, which the AI Hub route applies before it stores the recording. */
 export const MAX_RECORDING_BYTES = 25_000_000;
 const CATALOG_TIMEOUT_MS = 8000;
@@ -39,8 +41,11 @@ async function prepare(ctx: Context) {
   if (!type) throw new Error("BeLive AI Hub transcription takes MP3 or WAV recordings only; convert the file first");
   const language = languageCode(ctx.language);
   const apiKey = await resolveApiKey(ctx.cfg, ctx.agentDir);
-  const model = ctx.model?.trim() || DEFAULT_TRANSCRIPTION_MODEL;
+  let model = ctx.model?.trim() || DEFAULT_TRANSCRIPTION_MODEL;
   const offered = (await fetchTranscriptionModels(baseUrl, apiKey, { timeoutMs: CATALOG_TIMEOUT_MS, signal: ctx.signal })).map(row => row.id);
+  if (model === DEFAULT_TRANSCRIPTION_MODEL && !offered.includes(model) && offered.includes(FALLBACK_TRANSCRIPTION_MODEL)) {
+    model = FALLBACK_TRANSCRIPTION_MODEL;
+  }
   if (!offered.includes(model)) {
     throw new Error(`BeLive AI Hub does not list ${model} as a transcription model. Offered: ${offered.join(", ") || "none"}`);
   }
