@@ -149,3 +149,11 @@ Reports the gateway's request id (`X-Generation-Id`) for support, from customer 
 
 - `npm run typecheck`: passed. `npm test`: **59 passed, 0 failed** under Node 24.16.0; existing image, speech, transcription and understanding tests now also assert the id in results and failures, and that a malformed header is not repeated.
 - Staging, 2026-11-07, the built adapters called directly with only the staging key: a speech request with an unknown voice failed with the gateway's voice list and `(AI Hub request req_22uzfwjt220txb6gmgc89xn6ox)` (refused before running, uncharged, and `GET /generation` answers 404 for it); `qwen/qwen-image-2.1-turbo` returned `metadata.requestId` `req_5obm213tyruv57167tmv7piwyx`, which `GET /generation?id=` returned with the model and USD 0.016.
+
+## Failure paths (2026-11-07, no version change)
+
+Customer feedback asked for failure-path qualification. `tests/failures.test.mjs` runs each paid media call (image, speech, transcription, video understanding, video generation) against 401 `invalid API key`, 402 `insufficient credit`, 429 with `Retry-After: 1`, 502 and 503, and a dropped connection. Every case names the status, the gateway's message and the request id, never the key, and sends the paid request once. Video generation retries 429 and 5xx three times under one Idempotency-Key, looks the job up by that key between attempts, waits the `Retry-After`, and keeps its record for a rerun; 401 and 402 are final and leave no record. A failed transcription upload throws, so OpenClaw does not hand the recording to another provider. No code change was needed: **69 passed, 0 failed** (59 existing, 10 new) under Node 24.16.0.
+
+Staging, with an invalid key and published 0.3.2: image, speech and transcription each failed with `HTTP 401: invalid API key (AI Hub request req_…)`; chat (host transport) failed with the host's `401 invalid API key` message.
+
+Chat streams are the host's. Against a local fake endpoint on `openclaw@2026.11.1` (custom `openai-completions` provider): a stream that sent text and then a top-level `error` frame made **one** request and failed with the error's message; a stream that ended without `[DONE]` made one request and failed with "Stream ended without finish_reason". In neither case was the partial text returned as the answer.
