@@ -24,7 +24,7 @@ Select a model using its full client reference, such as `belive-aihub/qwen/qwen3
 
 ## Without the plugin
 
-OpenClaw older than 2026.11.1, or a host where you do not want a plugin, can call BeLive AI Hub as a custom OpenAI-compatible provider. This is the recipe in the public [OpenClaw guide](https://aihub.belive.sg/docs/openclaw), which also covers media settings. It was run against production on OpenClaw 2026.11.1 on 2026-11-09.
+OpenClaw older than 2026.11.1, or a host where you do not want a plugin, can call BeLive AI Hub as a custom OpenAI-compatible provider. It is compatible with the custom-provider recipe in the public [OpenClaw guide](https://aihub.belive.sg/docs/openclaw): same provider id, key name and models. The guide also sets model aliases and covers media settings. It was run against production on OpenClaw 2026.11.1 on 2026-11-09.
 
 Put `BELIVE_TOKENHUB_API_KEY=sk-tokenhub-…` in `~/.openclaw/.env` or the gateway process's environment, not a project `.env`, which OpenClaw does not trust. Do not use `TOKENHUB_API_KEY`: OpenClaw's Tencent TokenHub provider reads that name. Then merge into `~/.openclaw/openclaw.json`:
 
@@ -72,6 +72,41 @@ What you do not get without the plugin:
 | Address guard, request ids in media errors, video resume | Yes | No |
 
 To move to the plugin later, keep the key name, change model references from `tokenhub/…` to `belive-aihub/…`, and remove the `models.providers.tokenhub` block in the same change.
+
+## Scheduled automations
+
+A scheduled job needs a stored inference account. `BELIVE_TOKENHUB_API_KEY` in the Gateway's environment, or a provider `apiKey` setting, is enough for interactive chat, but OpenClaw does not accept it as the account of an isolated, scheduled job, and refuses to create a new job that would rely on it. A chat that works does not show that a scheduled job can use the same key.
+
+1. Save the key as an auth profile for the job's agent. OpenClaw prompts for it; never put it in a command argument, a document or a log:
+
+   ```sh
+   openclaw models auth paste-api-key --provider belive-aihub --agent <job-agent>
+   ```
+
+   Use the profile id OpenClaw prints (by default `belive-aihub:manual`).
+
+2. Saving a profile, or changing a job's plain model, does not move an existing job to it. Adopt the account explicitly, keeping the job's model:
+
+   ```sh
+   openclaw automations edit <job-id> --model "belive-aihub/<model-id>@<profile-id>"
+   ```
+
+   The schedule, instructions, tools, delivery and enabled state are unchanged.
+
+3. Before pinning a job that has no explicit model, check what it really uses: an isolated job can take `agents.defaults.subagents.model` (or the agent's `subagents.model`) ahead of the agent's main model.
+
+4. Check `openclaw automations runs <job-id> --limit 3`: provider `belive-aihub`, the intended model, status `ok`, and delivery status `delivered` when the job sends a message. A queued-run acknowledgement alone proves neither. `openclaw automations run <job-id> --wait` runs the real job, messages included; use it only when you mean to.
+
+Inference accounts are separate from a job's Gmail, Telegram and other tool or delivery accounts. Deleting or replacing the stored profile stops a job bound to it instead of switching accounts.
+
+| Symptom | What to do |
+|---|---|
+| `Automation has no recorded inference account` | Save a profile and adopt it with `model@profile` |
+| `Automation candidate is incompatible with its recorded inference account and route` | The new model's provider differs from the recorded account; adopt a matching profile with `model@profile` |
+| Job runs on another provider although the agent's main model is on AI Hub | Check the job's model, any saved session model and `subagents.model` |
+| `heartbeat skipped: no-route` | Heartbeat delivery routing; unrelated to the inference account |
+
+Do not repair these by editing OpenClaw's database, removing unrelated provider profiles, changing global model defaults or enabling disabled jobs. Checked against OpenClaw 2026.11.1 ([inference account continuity](https://docs.openclaw.ai/automation/cron-jobs/payloads), [troubleshooting](https://docs.openclaw.ai/automation/cron-jobs/troubleshooting)); used on 2026-11-09 to repair one job on one installation with plugin 0.3.2, not a guarantee for every setup.
 
 ## Discovery, context and price estimates
 
