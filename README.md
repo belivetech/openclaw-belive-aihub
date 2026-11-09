@@ -24,37 +24,41 @@ Select a model using its full client reference, such as `belive-aihub/qwen/qwen3
 
 ## Without the plugin
 
-OpenClaw can call BeLive AI Hub as a custom OpenAI-compatible provider, without this plugin. OpenClaw documents this shape from 2026.7.1 through 2026.11.1. It was checked against the OpenClaw 2026.11.1 source on 2026-11-09, not run.
+OpenClaw older than 2026.11.1, or a host where you do not want a plugin, can call BeLive AI Hub as a custom OpenAI-compatible provider. This is the recipe in the public [OpenClaw guide](https://aihub.belive.sg/docs/openclaw), which also covers media settings. It was run against production on OpenClaw 2026.11.1 on 2026-11-09.
 
-Put `BELIVE_TOKENHUB_API_KEY=sk-tokenhub-…` in `~/.openclaw/.env` or the shell, not a project `.env`, which OpenClaw does not trust. Do not use `TOKENHUB_API_KEY`: OpenClaw's Tencent provider reads that name. Then merge into `~/.openclaw/openclaw.json`:
+Put `BELIVE_TOKENHUB_API_KEY=sk-tokenhub-…` in `~/.openclaw/.env` or the gateway process's environment, not a project `.env`, which OpenClaw does not trust. Do not use `TOKENHUB_API_KEY`: OpenClaw's Tencent TokenHub provider reads that name. Then merge into `~/.openclaw/openclaw.json`:
 
-```json5
+```json
 {
-  models: {
-    providers: {
-      belive: {                                   // not "belive-aihub", the plugin's provider id
-        baseUrl: "https://tokenhub-api.belive.sg/api/v1",
-        apiKey: "${BELIVE_TOKENHUB_API_KEY}",
-        api: "openai-completions",
-        models: [
-          { id: "qwen/qwen3.8-flash", name: "Qwen3.8 Flash", reasoning: true,
-            input: ["text", "image"], contextWindow: 1000000, maxTokens: 8192 },
-          { id: "z-ai/glm-5.3-flash", name: "GLM-5.3 Flash", reasoning: true,
-            input: ["text", "image"], contextWindow: 1000000, maxTokens: 8192 }
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "tokenhub": {
+        "baseUrl": "https://tokenhub-api.belive.sg/api/v1",
+        "apiKey": "${BELIVE_TOKENHUB_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          { "id": "z-ai/glm-5.3-flash", "name": "GLM-5.3 Flash", "input": ["text", "image"], "contextWindow": 1000000, "maxTokens": 8192 },
+          { "id": "deepseek/deepseek-v4.1-flash-1017", "name": "DeepSeek V4.1 Flash", "input": ["text", "image"], "contextWindow": 1024000, "maxTokens": 8192 }
         ]
       }
     }
   },
-  agents: { defaults: {
-    model: { primary: "belive/qwen/qwen3.8-flash", fallbacks: ["belive/z-ai/glm-5.3-flash"] },
-    imageModel: { primary: "belive/qwen/qwen3.8-flash" }
-  } }
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "tokenhub/z-ai/glm-5.3-flash",
+        "fallbacks": ["tokenhub/deepseek/deepseek-v4.1-flash-1017"]
+      }
+    }
+  }
 }
 ```
 
 - Copy `contextWindow` and the input types from `GET https://tokenhub-api.belive.sg/api/v1/models` (`context_length`, `architecture.input_modalities`).
 - Set `maxTokens` yourself. AI Hub reserves credit for the output cap of each request, and the plugin caps it for you.
-- From OpenClaw 2026.10.5, models marked `reasoning: true` get a top-level `reasoning_effort` (default `medium`). On 2026.10.4 and earlier, add `compat: { supportsReasoningEffort: true }` to each model.
+- From OpenClaw 2026.10.5, models marked `reasoning: true` get a top-level `reasoning_effort` (default `medium`). On 2026.10.4 and earlier, add `"compat": { "supportsReasoningEffort": true }` to each model.
+- A setup made from an earlier version of the guide used `TOKENHUB_API_KEY`; rename the variable and its `${…}` references together.
 
 What you do not get without the plugin:
 
@@ -63,10 +67,11 @@ What you do not get without the plugin:
 | Chat, tools, fallback, image understanding | Yes | Yes |
 | Model list, context and prices | From the live catalogue | Typed by hand |
 | Output cap that limits credit holds | Automatic | Your `maxTokens` |
-| Image, video, speech and speech-to-text tools | Yes | No |
+| Image and video generation, speech | Yes | Through per-feature settings in the guide |
+| Speech to text, video understanding | Yes | No |
 | Address guard, request ids in media errors, video resume | Yes | No |
 
-To move to the plugin later, keep the key name, change model references from `belive/…` to `belive-aihub/…`, and remove the `models.providers.belive` block in the same change.
+To move to the plugin later, keep the key name, change model references from `tokenhub/…` to `belive-aihub/…`, and remove the `models.providers.tokenhub` block in the same change.
 
 ## Discovery, context and price estimates
 
